@@ -12,8 +12,36 @@
 
 ## 0. Comment utiliser ce pack
 
-**Ordre :** `P0.1 → P0.7`, puis `P1 → P10`, puis `P12 → P16`, puis `C1 → C3` (Crew). Ne saute jamais la phase 0 :
-c'est elle qui récolte les points « Technological Implementation ».
+**On travaille tâche par tâche dans l'ordre de `.kiro/specs/graveyard-core/tasks.md`, une tâche = un prompt = une
+session Kiro = un commit.** Ce fichier est un distributeur, pas un script à dérouler : les blocs `P0.x`, `P11`,
+`P12-P16`, `C1-C3` sont à coller au moment indiqué dans la table ci-dessous, et jamais avant.
+
+| Où on en est | Ce qu'on fait dans Kiro | Bloc de référence |
+|---|---|---|
+| **Tâche 0** | adoption de la spec dans le panneau + `docs/KIRO_LOG.md` | P0.1 |
+| 1.1 | scaffold Vite + React + R3F (versions vérifiées) | ci-dessous §« 1.1 » |
+| 1.2 | structure de dossiers, licence, `scripts/kiro-check.mjs` | P0.3 |
+| 1.2 bis | filets de sécurité : budget de perf, hooks, agents custom | P0.4, P0.5, P0.6 |
+| 1.3 | scène nocturne minimale + readout FPS | P1 addition |
+| 2.1 – 2.3 | domaine pur | P2 |
+| 2.4 | tests unitaires + PBT (dont génération Kiro) | P2 + P2bis |
+| 3.x | store + persistance | P3 |
+| 4.1 – 4.3 | monde, contrôleur, prompts d'interaction | P4 |
+| 4.4 | **checkpoint perf, go/no-go** | **P11** |
+| après 4.x | smoke test + captures via Playwright MCP | P0.7 |
+| 5.x | tombes + livre + machine à états | P5 |
+| 6.x | grimoire + inhumation | P6 |
+| 7.x | résurrection | P7 |
+| 8.x | après résurrection | P8 |
+| 9.x | confort + mode simple | P9 |
+| 10.1 | polish visuel | prompt « pauvre visuellement » |
+| 10.2 | README, write-up, vidéo, blog, audit | P12 → P16 |
+| 10.3 | son procédural | — |
+| hors sprint | repo Crew séparé | C1 → C3 |
+
+**Boucle de travail avec l'agent Arena :** tu colles le prompt → tu me rapportes la fin de réponse de Kiro (ou le
+diff, ou la sortie d'erreur) → je vérifie contre la requirement concernée → je te donne soit le prompt de
+correction, soit la tâche suivante. Ne saute pas le rapport : c'est là que les dérives se voient, pas dans le code.
 
 **Règles d'hygiène de prompt (elles protègent tes 4 000 crédits) :**
 
@@ -93,8 +121,8 @@ Create the verification tooling. Scope: package.json scripts + one script file, 
   src/domain imports from world, book, cinematics, interaction, ui, grimoire or store;
   a file under src/world, src/book, src/cinematics or src/interaction contains "new THREE." with no dispose of the
   same identifier in that module;
-  a file under src/world or src/cinematics creates a particle system whose count exceeds the budget in
-  .kiro/steering/perf-budget.md;
+  a file under src/world or src/cinematics creates a particle system whose count exceeds the budget declared in
+  .kiro/steering/perf-budget.md (if that file does not exist yet, skip this check silently);
   src/ references a remote asset URL that is not listed in docs/ASSETS.md.
 Print "ok" and exit 0 when every check passes. Keep the checker fast: under one second, no network, no build.
 ```
@@ -196,6 +224,30 @@ The Playwright MCP server is available in this workspace. Use its browser tools;
 ---
 
 ## 2. P1 → P10 — Le build
+
+### Tâche 1.1 — scaffold (coller après la tâche 0)
+
+```
+Implement task 1.1 from .kiro/specs/graveyard-core/tasks.md. No scene, no store, no UI: this task only proves the
+toolchain runs.
+- Vite + React + TypeScript with strict enabled, plus noUncheckedIndexedAccess and exactOptionalPropertyTypes.
+- React, @react-three/fiber and @react-three/drei must be a version-compatible set. Do not guess: install them, read
+  back the resolved versions and their peer requirements, and record one row in docs/KIRO_LOG.md with the reasoning.
+- Do not add @react-three/postprocessing, any effect library, any CSS framework or any component library.
+- Zustand, Vitest and fast-check installed and wired (vitest runnable with one trivial test).
+- Path alias @/ -> src. tsconfig, vite config and package.json scripts: dev, build, typecheck, test.
+Report the version table you resolved and the exit status of each script. Update nothing else.
+```
+
+### Tâche 1.2 — structure + garde-fous (prompt-mère + P0.3)
+
+```
+Implement task 1.2 from the spec: the folder skeleton from .kiro/steering/structure.md, the MIT license check, and
+.gitignore that never excludes .kiro. Then create npm run check = typecheck && vitest run --silent && node
+scripts/kiro-check.mjs, where scripts/kiro-check.mjs implements the repo checks listed in docs/KIRO_PROMPTS.md
+under "P0.3". Keep the checker dependency-free and under one second. Empty folders get a one-line index.ts only when
+the build needs it. Do not create components yet.
+```
 
 **Prompt-mère**, à réutiliser en changeant seulement le numéro :
 
