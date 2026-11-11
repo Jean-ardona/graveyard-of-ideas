@@ -43,6 +43,31 @@ session Kiro = un commit.** Ce fichier est un distributeur, pas un script à dé
 diff, ou la sortie d'erreur) → je vérifie contre la requirement concernée → je te donne soit le prompt de
 correction, soit la tâche suivante. Ne saute pas le rapport : c'est là que les dérives se voient, pas dans le code.
 
+**Permissions locales (confort, pas un livrable)** : le plus simple est de cliquer **Always allow** sur la popup
+d'approbation la première fois que chaque commande apparaît. Si tu préfères le déclarer, le fichier est
+`~/.kiro/settings/permissions.yaml` (portée utilisateur, donc **hors repo et invisible des juges**) :
+
+```yaml
+rules:
+  - capability: shell
+    match: ["npm *", "npx *", "node *", "git *", "ls *", "cat *"]
+    effect: allow
+  - capability: shell
+    match: ["rm -rf *", "sudo *", "curl *", "git push --force *", "git reset --hard *"]
+    effect: deny
+  - capability: fs_read
+    effect: allow
+  - capability: fs_write
+    match: [".git/**", "*.env"]
+    effect: deny
+```
+
+`deny` gagne toujours sur `allow`, indépendamment de la portée. Les `match` sont des préfixes : une commande chaînée
+(`npm i && npm run build`) ne s'auto-exécute que si chaque segment est couvert. Ne touche pas au sandbox local
+(`sandbox_network`) : ses règles d'hôtes peuvent bloquer `registry.npmjs.org`. Le fichier de portée workspace vit sous
+`~/.kiro/workspace-roots/<hash>/permissions.yaml` — jamais dans le repo, raison pour laquelle la politique qui compte
+est celle des agents custom (P0.6).
+
 **Règles d'hygiène de prompt (elles protègent tes 4 000 crédits) :**
 
 1. **Une session Kiro = une tâche.** Chat neuf à chaque tâche. Un chat long = contexte dilué = fichiers régénérés en entier.
@@ -192,6 +217,13 @@ Create three files.
 2. .kiro/agents/graveyard-polisher.md — an art-direction implementer, same resources, allowed to edit only src/world,
    src/book, src/ui and the quality presets. System prompt: raise emotional quality without changing behaviour,
    public APIs or tests; stay procedural; obey the perf budget; stop and ask before adding a dependency or asset.
+   Both agents also declare Kiro capability-based permissions explicitly, in the format this Kiro version expects, so
+   the policy is committed and reviewable instead of living in ~/.kiro/settings/permissions.yaml:
+   graveyard-reviewer gets fs_read allow and fs_write deny for "**" (it must be structurally unable to patch code);
+   graveyard-polisher gets fs_write allow limited to ["src/world/**","src/book/**","src/ui/**","src/interaction/**"]
+   and shell allow for ["npm run check *","npm run test *","git diff *","git status *"], with deny on package.json,
+   package-lock.json, .kiro/** and .git/**. Both deny rm, sudo, curl and force-push. If a rule cannot be expressed in
+   the schema, say so in your reply instead of writing a config that silently does nothing.
 3. Two steering files, leaving the existing four untouched:
    .kiro/steering/scene-rules.md, inclusion fileMatch on ["src/world/**/*.tsx","src/book/**/*.tsx",
    "src/cinematics/**/*.tsx","src/interaction/**/*.tsx"]: the visual laws — cold moonlit palette, amber is the only
