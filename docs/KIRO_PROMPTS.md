@@ -406,6 +406,9 @@ puffery. Structure it exactly on the Devpost question list:
 - MCP: the Playwright smoke test and screenshots, and what it enabled that a manual pass would not have.
 - Kiro powers and skills: if you did not use them, say so and say what you used instead. Do not invent usage.
 End with "Limits": what you did not use, what Kiro got wrong, and what you would rebuild. Keep it under 900 words.
+In the first paragraph, state plainly how the work was split: the concept and the first draft of the requirements were
+written with a chat assistant before implementation began, and everything that exists as code, tests, hooks, agents
+and documentation was produced inside Kiro, task by task, with the log in docs/KIRO_LOG.md. No hedging, no omission.
 ```
 
 ### P14 — Démo vidéo (< 3 min, pièce publique sur YouTube)
