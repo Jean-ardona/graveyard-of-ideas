@@ -6,6 +6,7 @@ import FpsCounter from './world/FpsCounter';
 import type { RenderStats } from './world/renderStats';
 import ControlsHint from './ui/ControlsHint';
 import PointerHud from './ui/PointerHud';
+import InteractionPrompt from './ui/InteractionPrompt';
 
 /** Returns true if the browser can create a WebGL context. */
 function isWebGLAvailable(): boolean {
@@ -123,6 +124,7 @@ export default function App() {
       </div>
       <FpsCounter statsRef={statsRef} />
       <PointerHud />
+      <InteractionPrompt />
       <ControlsHint />
     </div>
   );

@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import * as THREE from 'three';
+import { registerActionHandler, registerInteractable } from '../interaction';
 import { COLORS, HUT_POSITION } from './config';
 import { createGlowTexture } from './glowTexture';
 import { useDisposable } from './geometryUtils';
@@ -8,11 +10,36 @@ const WIDTH = 5;
 const HEIGHT = 2.6;
 const DEPTH = 4;
 
+const DOOR_X = -0.9;
+const DOOR_HEIGHT = 1.0;
+const DOOR_REACH = 2.6;
+const ENTER_ACTION = 'enter-hut';
+
 /** Keeper's hut. Faces +z, toward the gate. The interior comes later. */
 export default function Hut() {
   const y = terrainHeight(HUT_POSITION.x, HUT_POSITION.z);
   const front = DEPTH / 2 + 0.03;
   const glow = useDisposable(createGlowTexture);
+
+  useEffect(() => {
+    const removeDoor = registerInteractable({
+      id: 'hut-door',
+      position: { x: HUT_POSITION.x + DOOR_X, y: y + DOOR_HEIGHT, z: HUT_POSITION.z + DEPTH / 2 },
+      radius: DOOR_REACH,
+      label: "Enter the keeper's hut",
+      action: ENTER_ACTION,
+      enabled: true,
+    });
+    // Placeholder until the hut interior exists.
+    const removeHandler = registerActionHandler(ENTER_ACTION, () => {
+      console.info('Enter the keeper\'s hut');
+    });
+    return () => {
+      removeDoor();
+      removeHandler();
+    };
+  }, [y]);
+
   return (
     <group position={[HUT_POSITION.x, y, HUT_POSITION.z]}>
       <mesh position={[0, HEIGHT / 2, 0]}>

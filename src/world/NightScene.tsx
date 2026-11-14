@@ -1,5 +1,6 @@
 import { COLORS, FOG, MOON_DIRECTION } from './config';
 import PlayerController from '../interaction/PlayerController';
+import InteractionController from '../interaction/InteractionController';
 import DeadTrees from './DeadTrees';
 import Gate from './Gate';
 import Hut from './Hut';
@@ -28,6 +29,7 @@ export default function NightScene({ playerEnabled = true }: { playerEnabled?: b
       <hemisphereLight args={[COLORS.moonlight, COLORS.hemiGround, 0.5]} />
       <directionalLight color={COLORS.moonlight} intensity={1} position={MOONLIGHT_POSITION} />
       <PlayerController enabled={playerEnabled} />
+      <InteractionController enabled={playerEnabled} />
       <Stars />
       <Moon />
       <GroundMesh />
