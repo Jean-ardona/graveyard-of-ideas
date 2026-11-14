@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { exportData } from '../domain';
+import { emptyData } from '../store/persistence';
 import {
   BACKUP_KEY,
   STORAGE_KEY,
@@ -25,6 +26,13 @@ class MemoryStorage implements StorageLike {
   }
 }
 
+/** Storage that already holds seeded, empty data, so tests start from a graveyard with no projects. */
+function emptyStorage(): MemoryStorage {
+  const storage = new MemoryStorage();
+  storage.items.set(STORAGE_KEY, exportData({ ...emptyData(), seeded: true }));
+  return storage;
+}
+
 const quotaError = () => new DOMException('full', 'QuotaExceededError');
 
 function bury(store: GraveyardStore, title: string) {
@@ -32,7 +40,7 @@ function bury(store: GraveyardStore, title: string) {
 }
 
 function seededStorage(titles: string[]): MemoryStorage {
-  const storage = new MemoryStorage();
+  const storage = emptyStorage();
   const store = createGraveyardStore(storage);
   titles.forEach((title) => bury(store, title));
   storage.items.set(STORAGE_KEY, store.getState().exportJson());
@@ -43,8 +51,8 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('load', () => {
-  it('starts empty without warning when nothing is stored', () => {
-    const state = createGraveyardStore(new MemoryStorage()).getState();
+  it('starts empty without warning when seeded data holds no projects', () => {
+    const state = createGraveyardStore(emptyStorage()).getState();
     expect(state.data.projects).toEqual([]);
     expect(state.warning).toBeNull();
     expect(state.saveError).toBeNull();
@@ -56,7 +64,7 @@ describe('load', () => {
   });
 
   it('keeps a backup, starts empty and warns on corrupted data', () => {
-    const storage = new MemoryStorage();
+    const storage = emptyStorage();
     storage.items.set(STORAGE_KEY, '{not json');
     const state = createGraveyardStore(storage).getState();
     expect(state.data.projects).toEqual([]);
@@ -65,7 +73,7 @@ describe('load', () => {
   });
 
   it('treats schema-invalid data as corrupted', () => {
-    const storage = new MemoryStorage();
+    const storage = emptyStorage();
     const invalid = JSON.stringify({ schemaVersion: 1, projects: 'nope' });
     storage.items.set(STORAGE_KEY, invalid);
     const state = createGraveyardStore(storage).getState();
@@ -82,29 +90,29 @@ describe('load', () => {
 
 describe('autosave', () => {
   it('saves once after the debounce delay', () => {
-    const storage = new MemoryStorage();
+    const storage = emptyStorage();
     const store = createGraveyardStore(storage);
     const autosave = startAutosave(store, storage, 500);
     bury(store, 'A');
     bury(store, 'B');
-    expect(storage.items.has(STORAGE_KEY)).toBe(false);
+    expect(createGraveyardStore(storage).getState().data.projects).toHaveLength(0);
     vi.advanceTimersByTime(500);
     expect(createGraveyardStore(storage).getState().data.projects).toHaveLength(2);
     autosave.dispose();
   });
 
   it('flushes immediately when the page is hidden', () => {
-    const storage = new MemoryStorage();
+    const storage = emptyStorage();
     const store = createGraveyardStore(storage);
     const autosave = startAutosave(store, storage, 500);
     bury(store, 'A');
     window.dispatchEvent(new Event('pagehide'));
-    expect(storage.items.has(STORAGE_KEY)).toBe(true);
+    expect(createGraveyardStore(storage).getState().data.projects).toHaveLength(1);
     autosave.dispose();
   });
 
   it('keeps data in memory and reports quota errors, then recovers', () => {
-    const storage = new MemoryStorage();
+    const storage = emptyStorage();
     const store = createGraveyardStore(storage);
     const autosave = startAutosave(store, storage, 500);
     storage.failWith = quotaError();
@@ -132,7 +140,7 @@ describe('autosave', () => {
   });
 
   it('classifies a generic storage failure as unavailable', () => {
-    const storage = new MemoryStorage();
+    const storage = emptyStorage();
     const store = createGraveyardStore(storage);
     const autosave = startAutosave(store, storage, 500);
     storage.failWith = new Error('denied');
@@ -145,9 +153,9 @@ describe('autosave', () => {
 
 describe('import and export', () => {
   it('round-trips through export, prepareImport and confirmReplace', () => {
-    const source = createGraveyardStore(new MemoryStorage());
+    const source = createGraveyardStore(emptyStorage());
     bury(source, 'A');
-    const target = createGraveyardStore(new MemoryStorage());
+    const target = createGraveyardStore(emptyStorage());
 
     const prepared = target.getState().prepareImport(source.getState().exportJson());
     expect(prepared).toEqual({ ok: true, projectCount: 1 });
@@ -159,7 +167,7 @@ describe('import and export', () => {
   });
 
   it('never replaces current data when the import fails', () => {
-    const store = createGraveyardStore(new MemoryStorage());
+    const store = createGraveyardStore(emptyStorage());
     bury(store, 'Keep');
     const before = store.getState().data;
 
@@ -172,9 +180,9 @@ describe('import and export', () => {
   });
 
   it('a failed import discards an earlier pending import', () => {
-    const source = createGraveyardStore(new MemoryStorage());
+    const source = createGraveyardStore(emptyStorage());
     bury(source, 'Other');
-    const store = createGraveyardStore(new MemoryStorage());
+    const store = createGraveyardStore(emptyStorage());
     bury(store, 'Keep');
 
     store.getState().prepareImport(source.getState().exportJson());
@@ -184,9 +192,9 @@ describe('import and export', () => {
   });
 
   it('cancelImport leaves the data untouched', () => {
-    const store = createGraveyardStore(new MemoryStorage());
+    const store = createGraveyardStore(emptyStorage());
     bury(store, 'Keep');
-    store.getState().prepareImport(exportData(createGraveyardStore(new MemoryStorage()).getState().data));
+    store.getState().prepareImport(exportData(createGraveyardStore(emptyStorage()).getState().data));
     store.getState().cancelImport();
     expect(store.getState().confirmReplace()).toBe(false);
     expect(store.getState().data.projects).toHaveLength(1);
@@ -195,7 +203,7 @@ describe('import and export', () => {
 
 describe('domain actions', () => {
   it('changes data only on success', () => {
-    const store = createGraveyardStore(new MemoryStorage());
+    const store = createGraveyardStore(emptyStorage());
     expect(store.getState().buryNewProject({ title: ' ', description: 'd' }).ok).toBe(false);
     expect(store.getState().data.projects).toHaveLength(0);
 

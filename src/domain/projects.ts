@@ -15,6 +15,7 @@ export interface ProjectInput {
   abandonReason?: string;
   epitaph?: string;
   notes?: string;
+  reducedVersion?: string;
   links?: string[];
 }
 
@@ -56,6 +57,7 @@ function createBuriedProject(
     abandonReason: input.abandonReason,
     epitaph: input.epitaph,
     notes: input.notes ?? '',
+    reducedVersion: input.reducedVersion,
     links: (input.links ?? []).map((link) => link.trim()),
     status: 'resting',
     slot,

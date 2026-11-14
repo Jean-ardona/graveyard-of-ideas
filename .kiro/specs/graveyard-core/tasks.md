@@ -18,7 +18,7 @@ Build Graveyard of Ideas in layers: pure domain logic first (cheap, GPU-free, pr
 
 - [ ] 3. Store and persistence
   - [x] 3.1 Zustand store, versioned localStorage adapter, autosave, error handling. _Requirements: 7_
-  - [ ] 3.2 Seed three demo projects once only. _Requirements: 7.5_
+  - [x] 3.2 Seed three demo projects once only. _Requirements: 7.5_
 
 - [ ] 4. World
   - [ ] 4.1 Night terrain, partial blue moon, mist, gate, paths, hut, dead trees, stones. _Requirements: 1.1_

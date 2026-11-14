@@ -1,9 +1,18 @@
 import { createStore } from 'zustand/vanilla';
 import type { StoreApi } from 'zustand/vanilla';
-import { buryNewProject, exportData, honor, importData, remove, restAgain, resurrect } from '../domain';
+import {
+  buryNewProject,
+  exportData,
+  honor,
+  importData,
+  remove,
+  restAgain,
+  resurrect,
+  seedDemoProjects,
+} from '../domain';
 import type { AppData, ImportError, Project } from '../domain';
-import { loadData } from './persistence';
-import type { StorageError, StorageLike } from './persistence';
+import { loadData, saveData } from './persistence';
+import type { LoadResult, StorageError, StorageLike } from './persistence';
 
 export type PrepareImportResult =
   | { ok: true; projectCount: number }
@@ -41,9 +50,23 @@ type DomainArgs<F extends (...args: never[]) => unknown> = Parameters<F> extends
 
 export type GraveyardStore = StoreApi<GraveyardState>;
 
+/**
+ * Loads the saved data and seeds the demo projects on a first launch (missing or reset data)
+ * and saves them at once. Data that failed to load is never seeded and counts as seeded,
+ * so the demo projects cannot appear later next to what the user had before.
+ */
+function startData(storage: StorageLike | null): LoadResult {
+  const loaded = loadData(storage);
+  if (loaded.warning !== null) return { ...loaded, data: { ...loaded.data, seeded: true } };
+  if (loaded.data.seeded) return loaded;
+
+  const data = seedDemoProjects(loaded.data);
+  return { ...loaded, data, error: saveData(storage, data) };
+}
+
 /** Creates the store, loading (and validating) whatever the storage holds. */
 export function createGraveyardStore(storage: StorageLike | null): GraveyardStore {
-  const loaded = loadData(storage);
+  const loaded = startData(storage);
 
   return createStore<GraveyardState>()((set, get) => {
     /** Applies a domain result: only a successful one changes the data. */
