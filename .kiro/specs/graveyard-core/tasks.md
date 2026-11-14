@@ -12,7 +12,7 @@ Build Graveyard of Ideas in layers: pure domain logic first (cheap, GPU-free, pr
 
 - [ ] 2. Domain core (no UI)
   - [x] 2.1 Types, createProject, allocateSlot, bury. _Requirements: 3, 4_
-  - [ ] 2.2 resurrect, restAgain, honor, remove with validation. _Requirements: 5, 6_
+  - [x] 2.2 resurrect, restAgain, honor, remove with validation. _Requirements: 5, 6_
   - [ ] 2.3 exportData / importData with schema validation and migration. _Requirements: 7_
   - [ ] 2.4 Property-based tests for all invariants (see docs/KIRO_PLAYBOOK.md). _Requirements: 4, 5, 6, 7, 9_
 
