@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
-import NightScene, { FpsTracker } from './world/NightScene';
+import NightScene from './world/NightScene';
+import FpsTracker from './world/FpsTracker';
 import FpsCounter from './world/FpsCounter';
 
 /** Returns true if the browser can create a WebGL context. */
@@ -46,7 +47,6 @@ export default function App() {
 
     function onContextLost(e: Event) {
       e.preventDefault(); // prevent automatic restore attempt
-      console.warn('[Debug] WebGL context lost.');
       setContextLost(true);
     }
 
@@ -109,9 +109,9 @@ export default function App() {
     <div style={{ width: '100vw', height: '100vh', background: '#1a2238' }}>
       <div ref={canvasContainerRef} style={{ width: '100%', height: '100%' }}>
         <Canvas
-          dpr={[1, 1.5]}
+          dpr={1}
           shadows={false}
-          camera={{ fov: 60, near: 0.1, far: 300, position: [0, 1.6, 2] }}
+          camera={{ fov: 60, near: 0.1, far: 200 }}
           style={{ width: '100%', height: '100%' }}
         >
           <NightScene />
