@@ -19,6 +19,23 @@ The planning is already written here, so credits go to implementation. Run one t
 - P8 History is append-only: history length never decreases, deletion aside.
 - P9 State machine guard: no second major cinematic can start while one is running.
 
+### Book interaction properties (task 5.3, details in the design)
+- P10 Sequence consistency: t and progress stay in range, phase matches t, closed and open are fixed points.
+- P11 Opening completes: enough ticks after OPEN always end in open, t never decreases.
+- P12 Reversal retraces: CLOSE keeps t, then t only decreases to closed; pose depends on t only.
+- P13 Open/close round trip returns to the initial state and page 0.
+- P14 One sequence at a time: OPEN only from closed, never restarts a running sequence.
+- P15 Pointer and input invariants: pointerLockReleased is true exactly in open (including page turning); inputLocked is true exactly when not closed.
+- P16 Skip fixed points: SKIP ends in open when opening, in closed when closing.
+- P17 Frame-rate independence: splitting the same duration into different dt values gives the same result.
+- P18 Page model invariants: index, progress and leaf angles in range; idle means progress 0; turned leaves form a prefix.
+- P19 50 percent rule: release at or above 50% completes the turn, below returns; cancel never changes the page.
+- P20 Keyboard turning equals a completed drag; next then prev returns to the same page; ends are no-ops.
+- P21 Closing waits for pages: CLOSE during a turn leaves open only when the page model is idle.
+- P22 Rendered leaf angle follows the cover (0 when the cover is closed).
+- P23 Page layout shows the required content per page; the resurrection button is disabled without a handler.
+- P24 Key routing: Escape closes, E closes only outside text fields, arrows turn pages only outside text fields.
+
 ## 3. Hooks worth creating in Kiro
 - On save of files in src/domain: run the domain test suite.
 - On creating a new file in src/world or src/cinematics: remind to dispose geometries/materials and add cleanup.

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type * as THREE from 'three';
 import type { QualityLevel } from './domain';
+import { BookReader, useReadingProject } from './book';
 import { appStore, useAppStore } from './store/appStore';
 import NightScene from './world/NightScene';
 import { nextQuality, qualityLabel, resolvePreset } from './world/quality';
@@ -56,6 +57,8 @@ export default function App() {
   const quality = useAppStore((state) => state.data.prefs.quality);
   const reducedMotion = useAppStore((state) => state.data.prefs.reducedMotion);
   const preset = useMemo(() => resolvePreset(quality, reducedMotion), [quality, reducedMotion]);
+
+  const readingProject = useReadingProject();
 
   useDemoProjectsKey();
 
@@ -141,7 +144,7 @@ export default function App() {
           style={{ width: '100%', height: '100%' }}
           onCreated={watchCanvas}
         >
-          <NightScene preset={preset} quality={quality} />
+          <NightScene preset={preset} quality={quality} playerEnabled={readingProject === null} />
           <FpsTracker statsRef={statsRef} quality={quality} onAutoLower={lowerQualityAutomatically} />
         </Canvas>
       </div>
@@ -150,6 +153,7 @@ export default function App() {
       <PointerHud />
       <InteractionPrompt />
       <ControlsHint />
+      <BookReader />
     </div>
   );
 }

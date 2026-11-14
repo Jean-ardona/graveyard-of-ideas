@@ -13,6 +13,11 @@ const SLAB_HEIGHT = 0.55;
 const SLAB_CENTER_Y = 0.525;
 const RECESS_DEPTH = 0.04;
 const SLAB_DEPTH = 0.1;
+/** Floor and front of the cavity behind the slab, in tomb coordinates. */
+export const CAVITY = {
+  floorY: SLAB_CENTER_Y - SLAB_HEIGHT / 2,
+  frontZ: BODY_DEPTH / 2 + RECESS_DEPTH,
+} as const;
 /** The engraved name sits above the slab. */
 export const NAME_PLANE = { width: 0.7, height: 0.35, centerY: 1.0 } as const;
 

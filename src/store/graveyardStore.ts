@@ -2,6 +2,7 @@ import { createStore } from 'zustand/vanilla';
 import type { StoreApi } from 'zustand/vanilla';
 import {
   buryNewProject,
+  editProject,
   exportData,
   honor,
   importData,
@@ -35,6 +36,8 @@ export interface GraveyardState {
   restAgain: (id: string) => ReturnType<typeof restAgain>;
   honor: (id: string, input: Parameters<typeof honor>[1]) => ReturnType<typeof honor>;
   remove: (id: string) => ReturnType<typeof remove>;
+  /** Saves text edits made in a book. A change that alters nothing leaves the data untouched. */
+  editProject: (id: string, edit: Parameters<typeof editProject>[1]) => ReturnType<typeof editProject>;
 
   exportJson: () => string;
   prepareImport: (json: string) => PrepareImportResult;
@@ -90,6 +93,12 @@ export function createGraveyardStore(storage: StorageLike | null): GraveyardStor
       restAgain: (id) => commit(restAgain(id, get().data.projects)),
       honor: (id, input) => commit(honor(id, input, get().data.projects)),
       remove: (id) => commit(remove(id, get().data.projects)),
+      editProject: (id, edit) => {
+        const current = get().data.projects;
+        const result = editProject(id, edit, current);
+        if (result.ok && result.projects !== current) commit(result);
+        return result;
+      },
 
       exportJson: () => exportData(get().data),
 

@@ -3,6 +3,8 @@ export * from './slots';
 // Export the public API from projects — createBuriedProject is intentionally not exported.
 export { buryNewProject, rebury } from './projects';
 export { resurrect, restAgain, honor, remove } from './transitions';
+export { editProject, EDITABLE_FIELDS, maxLengthOf } from './edits';
+export type { EditableField, ProjectEdit, EditProjectResult } from './edits';
 export { isSafeLink, INVALID_LINK_MESSAGE } from './links';
 export { seedDemoProjects, DEMO_PROJECTS } from './seed';
 export { exportData, importData } from './dataTransfer';

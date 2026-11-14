@@ -40,6 +40,16 @@ export function modeOnResume(mode: PointerMode): PointerMode {
   return mode === 'released' ? 'lost' : mode;
 }
 
+/** Whether the pointer was freed (released to anything else) or taken back between two modes. */
+export type PointerEdge = 'freed' | 'taken' | null;
+
+/** Edge between two pointer modes: `released` entered or left. Other changes are no edge. */
+export function pointerEdge(prev: PointerMode, next: PointerMode): PointerEdge {
+  if (prev === next) return null;
+  if (next === 'released') return 'freed';
+  return prev === 'released' ? 'taken' : null;
+}
+
 let mode: PointerMode = 'idle';
 let target: HTMLElement | null = null;
 let hasLockedBefore = false;

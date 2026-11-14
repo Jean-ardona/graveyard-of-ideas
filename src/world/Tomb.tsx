@@ -1,9 +1,12 @@
 import { memo, useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { Book, BOOK_SIZE, openBook } from '../book';
+import type { BookAssets } from '../book';
 import { registerActionHandler, registerCollider, registerInteractable } from '../interaction';
 import { createEngravingTexture } from './engravingTexture';
 import { useDisposable } from './geometryUtils';
 import { terrainHeight } from './terrain';
+import { CAVITY } from './tombAssets';
 import type { TombAssets } from './tombAssets';
 import { registerTombHandle } from './tombHandles';
 import { sameTomb, slabOffset, tombCollider } from './tombLogic';
@@ -13,18 +16,26 @@ const PROMPT_HEIGHT = 0.9;
 /** The prompt point is this far in front of the tomb center. */
 const PROMPT_FRONT = 0.8;
 const REACH = 2.6;
+/** The book stands on the cavity floor, just clear of the recess wall and behind the closed slab. */
+const BOOK_CLEARANCE = 0.005;
+const BOOK_POSITION: [number, number, number] = [
+  0,
+  CAVITY.floorY + BOOK_CLEARANCE,
+  CAVITY.frontZ + BOOK_SIZE.depth / 2 + BOOK_CLEARANCE,
+];
 
 interface TombProps {
   descriptor: TombDescriptor;
   assets: TombAssets;
+  bookAssets: BookAssets;
 }
 
 /**
- * One tomb: stone body with a sliding front slab over a dark recess, and the name engraved
- * on its face. Geometry and stone materials are shared; only the name texture and its
- * material belong to this tomb and are disposed with it.
+ * One tomb: stone body with a sliding front slab over a dark recess holding the project's
+ * book, and the name engraved on its face. Geometry and materials (stone and book) are shared;
+ * only the name texture and its material belong to this tomb and are disposed with it.
  */
-function Tomb({ descriptor, assets }: TombProps) {
+function Tomb({ descriptor, assets, bookAssets }: TombProps) {
   const { id, title, label, x, z, rotation, lean, shape } = descriptor;
   const slabRef = useRef<THREE.Mesh>(null);
   const openProgress = useRef(0);
@@ -50,10 +61,8 @@ function Tomb({ descriptor, assets }: TombProps) {
       action,
       enabled: true,
     });
-    // Placeholder until the opening sequence exists.
-    const removeHandler = registerActionHandler(action, () => {
-      console.info(`Open tomb: ${title}`);
-    });
+    // Opens the book's pages directly until the tomb opening sequence exists.
+    const removeHandler = registerActionHandler(action, () => openBook(id));
     const removeCollider = registerCollider(tombCollider(descriptor));
     const removeHandle = registerTombHandle({
       id,
@@ -78,6 +87,9 @@ function Tomb({ descriptor, assets }: TombProps) {
       <group rotation={[0, 0, lean]}>
         <mesh geometry={assets.bodies[shape]} material={assets.stone} />
         <mesh geometry={assets.recess} material={assets.recessDark} />
+        <group position={BOOK_POSITION}>
+          <Book id={id} assets={bookAssets} />
+        </group>
         <mesh ref={slabRef} geometry={assets.slab} material={assets.slabStone} />
         <mesh geometry={assets.namePlane} material={nameMaterial} />
       </group>
