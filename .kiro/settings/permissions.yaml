@@ -1,0 +1,15 @@
+rules:
+  - capability: shell
+    match: ["npm *", "npx *", "node *", "git *", "ls *", "cat *", "mkdir -p *"]
+    effect: allow
+
+  - capability: shell
+    match: ["rm -rf *", "sudo *", "git push --force *", "git reset --hard *", "curl *", "curl * | *"]
+    effect: deny
+
+  - capability: fs_read
+    effect: allow
+
+  - capability: fs_write
+    match: [".git/**", "*.env"]
+    effect: deny

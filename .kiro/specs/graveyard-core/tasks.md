@@ -5,13 +5,13 @@ Build Graveyard of Ideas in layers: pure domain logic first (cheap, GPU-free, pr
 
 ## Tasks
 
-- [ ] 1. Project setup
-  - [ ] 1.1 Vite + React + TypeScript strict, React Three Fiber, drei, Zustand, Vitest, fast-check. _Requirements: all_
-  - [ ] 1.2 Folder structure per steering/structure.md; MIT license; never ignore .kiro.
-  - [ ] 1.3 Render a minimal night scene (ground plane, fog, moon light, three boxes) and display the frame rate, so performance can be measured on the target machine.
+- [x] 1. Project setup
+  - [x] 1.1 Vite + React + TypeScript strict, React Three Fiber, drei, Zustand, Vitest, fast-check. _Requirements: all_
+  - [x] 1.2 Folder structure per steering/structure.md; MIT license; never ignore .kiro.
+  - [x] 1.3 Render a minimal night scene (ground plane, fog, moon light, three boxes) and display the frame rate, so performance can be measured on the target machine.
 
 - [ ] 2. Domain core (no UI)
-  - [ ] 2.1 Types, createProject, allocateSlot, bury. _Requirements: 3, 4_
+  - [x] 2.1 Types, createProject, allocateSlot, bury. _Requirements: 3, 4_
   - [ ] 2.2 resurrect, restAgain, honor, remove with validation. _Requirements: 5, 6_
   - [ ] 2.3 exportData / importData with schema validation and migration. _Requirements: 7_
   - [ ] 2.4 Property-based tests for all invariants (see docs/KIRO_PLAYBOOK.md). _Requirements: 4, 5, 6, 7, 9_
