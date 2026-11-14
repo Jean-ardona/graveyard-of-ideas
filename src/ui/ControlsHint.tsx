@@ -32,9 +32,9 @@ export default function ControlsHint() {
 
   return (
     <div style={{ ...HINT_STYLE, opacity: visible ? 1 : 0 }} role="note">
-      Move with WASD, ZQSD or the arrow keys. Hold Shift to walk faster.
+      Move with WASD, ZQSD or the arrow keys. Hold Shift to sprint.
       <br />
-      Move the cursor left or right to turn. Press L for immersive look, Esc to leave it.
+      Click to look around with the mouse. Press Esc to free the cursor.
     </div>
   );
 }

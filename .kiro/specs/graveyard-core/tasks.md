@@ -22,7 +22,7 @@ Build Graveyard of Ideas in layers: pure domain logic first (cheap, GPU-free, pr
 
 - [ ] 4. World
   - [x] 4.1 Night terrain, partial blue moon, mist, gate, paths, hut, dead trees, stones. _Requirements: 1.1_
-  - [x] 4.2 Player controller (ZQSD/WASD/arrows), free-cursor look, optional Pointer Lock, bounds and collisions. _Requirements: 1.2, 1.3, 1.4_
+  - [x] 4.2 Player controller (ZQSD/WASD/arrows), direct mouse look with Pointer Lock by default (click-and-drag fallback), bounds and collisions. _Requirements: 1.2, 1.3, 1.4_
   - [ ] 4.3 Interaction prompts. _Requirements: 1.5_
   - [ ] 4.4 Quality presets, default Low. Checkpoint: measure on the target machine. _Requirements: 8.1_
 

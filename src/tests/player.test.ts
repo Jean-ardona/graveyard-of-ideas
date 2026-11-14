@@ -1,19 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import { resolveCollisions } from '../interaction/collision';
+import { MAX_LOOK_DELTA, MAX_PITCH, applyLook } from '../interaction/playerLook';
 import {
-  DEAD_ZONE,
-  MAX_PITCH,
-  MAX_YAW_RATE,
-  applyLockedLook,
-  stepFreeLook,
-} from '../interaction/playerLook';
-import {
-  FAST_SPEED_FACTOR,
   MAX_DELTA,
+  SPRINT_SPEED,
   WALK_SPEED,
   keysToAxes,
   stepPlayer,
 } from '../interaction/playerMovement';
+import {
+  allowsMovement,
+  modeAfterLockChange,
+  modeAfterLockFailure,
+  modeOnResume,
+  modeOnSuspend,
+} from '../interaction/pointerLock';
+import {
+  DEFAULT_LOOK_SENSITIVITY,
+  LOOK_SENSITIVITY_KEY,
+  MAX_LOOK_SENSITIVITY,
+  MIN_LOOK_SENSITIVITY,
+  loadLookSensitivity,
+  parseLookSensitivity,
+  saveLookSensitivity,
+} from '../store/lookSensitivity';
+import type { StorageLike } from '../store/persistence';
 import {
   COLLIDERS,
   GATE_POSITION,
@@ -64,9 +75,11 @@ describe('stepPlayer', () => {
     expect(next.x).toBeCloseTo(0);
   });
 
-  it('walks faster with shift', () => {
-    const next = step(open, FORWARD, 0, true, 0.1, NO_COLLIDERS);
-    expect(next.z).toBeCloseTo(-WALK_SPEED * FAST_SPEED_FACTOR * 0.1);
+  it('uses 2.0 units/s to walk and 3.2 units/s to sprint', () => {
+    expect(WALK_SPEED).toBe(2.0);
+    expect(SPRINT_SPEED).toBe(3.2);
+    expect(step(open, FORWARD, 0, false, 0.1, NO_COLLIDERS).z).toBeCloseTo(-0.2);
+    expect(step(open, FORWARD, 0, true, 0.1, NO_COLLIDERS).z).toBeCloseTo(-0.32);
   });
 
   it('does not move faster diagonally', () => {
@@ -147,29 +160,142 @@ describe('collisions', () => {
   });
 });
 
-describe('look', () => {
+describe('applyLook', () => {
   const still = { yaw: 0, pitch: 0 };
+  const S = DEFAULT_LOOK_SENSITIVITY;
 
-  it('ignores the cursor inside the dead zone', () => {
-    expect(stepFreeLook(still, DEAD_ZONE * 0.9, 0, 0.1).yaw).toBe(0);
+  it('scales pixels by the sensitivity', () => {
+    const look = applyLook(still, 100, 50, S);
+    expect(look.yaw).toBeCloseTo(-100 * S);
+    expect(look.pitch).toBeCloseTo(-50 * S);
+    expect(applyLook(still, 10, 0, 0.01).yaw).toBeCloseTo(-0.1);
   });
 
-  it('turns right when the cursor is on the right', () => {
-    expect(stepFreeLook(still, 1, 0, 0.1).yaw).toBeCloseTo(-MAX_YAW_RATE * 0.1);
+  it('turns right when the mouse moves right and up when it moves up', () => {
+    expect(applyLook(still, 10, 0, S).yaw).toBeLessThan(0);
+    expect(applyLook(still, -10, 0, S).yaw).toBeGreaterThan(0);
+    expect(applyLook(still, 0, -10, S).pitch).toBeGreaterThan(0);
+    expect(applyLook(still, 0, 10, S).pitch).toBeLessThan(0);
   });
 
-  it('turns left when the cursor is on the left', () => {
-    expect(stepFreeLook(still, -1, 0, 0.1).yaw).toBeGreaterThan(0);
+  it('does nothing for a zero delta', () => {
+    const look = { yaw: 0.7, pitch: -0.3 };
+    expect(applyLook(look, 0, 0, S)).toEqual(look);
   });
 
-  it('never tilts beyond 30 degrees', () => {
+  it('clamps pitch at 75 degrees both ways', () => {
+    expect(MAX_PITCH).toBeCloseTo((75 * Math.PI) / 180);
     let look = still;
-    for (let i = 0; i < 200; i++) look = stepFreeLook(look, 0, -5, 0.05);
-    expect(look.pitch).toBeLessThanOrEqual(MAX_PITCH + 1e-9);
+    for (let i = 0; i < 100; i++) look = applyLook(look, 0, -MAX_LOOK_DELTA, S);
     expect(look.pitch).toBeCloseTo(MAX_PITCH);
-    look = applyLockedLook(look, 0, -100000);
-    expect(look.pitch).toBeCloseTo(MAX_PITCH);
-    look = applyLockedLook(look, 0, 100000);
+    for (let i = 0; i < 200; i++) look = applyLook(look, 0, MAX_LOOK_DELTA, S);
     expect(look.pitch).toBeCloseTo(-MAX_PITCH);
+  });
+
+  it('accepts exactly 200 px and ignores anything larger, per axis', () => {
+    expect(applyLook(still, 200, 0, S).yaw).toBeCloseTo(-200 * S);
+    expect(applyLook(still, 0, 200, S).pitch).toBeCloseTo(-200 * S);
+    expect(applyLook(still, 201, 0, S).yaw).toBe(0);
+    expect(applyLook(still, -201, 0, S).yaw).toBe(0);
+    expect(applyLook(still, 0, 201, S).pitch).toBe(0);
+    expect(applyLook(still, 0, -5000, S).pitch).toBe(0);
+  });
+
+  it('filters one axis without affecting the other', () => {
+    const look = applyLook(still, 5000, 10, S);
+    expect(look.yaw).toBe(0);
+    expect(look.pitch).toBeCloseTo(-10 * S);
+  });
+
+  it('has no smoothing: the result depends only on the current delta', () => {
+    const a = applyLook({ yaw: 1, pitch: 0.2 }, 30, 20, S);
+    const b = applyLook({ yaw: 1, pitch: 0.2 }, 30, 20, S);
+    expect(a).toEqual(b);
+    expect(a.yaw).toBeCloseTo(1 - 30 * S, 12);
+    expect(a.pitch).toBeCloseTo(0.2 - 20 * S, 12);
+  });
+});
+
+describe('look sensitivity storage', () => {
+  function memoryStorage(initial: Record<string, string> = {}): StorageLike {
+    const data = new Map(Object.entries(initial));
+    return {
+      getItem: (key) => data.get(key) ?? null,
+      setItem: (key, value) => void data.set(key, value),
+      removeItem: (key) => void data.delete(key),
+    };
+  }
+
+  it('defaults to 0.0022 rad/pixel', () => {
+    expect(DEFAULT_LOOK_SENSITIVITY).toBe(0.0022);
+    expect(parseLookSensitivity(null)).toBe(0.0022);
+  });
+
+  it('accepts valid stored values and rejects invalid ones', () => {
+    expect(parseLookSensitivity('0.004')).toBe(0.004);
+    for (const bad of ['', ' ', 'abc', 'NaN', 'Infinity', '0', '-0.002', '5']) {
+      expect(parseLookSensitivity(bad)).toBe(DEFAULT_LOOK_SENSITIVITY);
+    }
+    expect(parseLookSensitivity(String(MIN_LOOK_SENSITIVITY))).toBe(MIN_LOOK_SENSITIVITY);
+    expect(parseLookSensitivity(String(MAX_LOOK_SENSITIVITY))).toBe(MAX_LOOK_SENSITIVITY);
+  });
+
+  it('saves and loads a round trip, refusing invalid values', () => {
+    const storage = memoryStorage();
+    expect(saveLookSensitivity(storage, 0.003)).toBe(true);
+    expect(loadLookSensitivity(storage)).toBe(0.003);
+    expect(saveLookSensitivity(storage, -1)).toBe(false);
+    expect(loadLookSensitivity(storage)).toBe(0.003);
+  });
+
+  it('never throws when storage is missing or broken', () => {
+    expect(loadLookSensitivity(null)).toBe(DEFAULT_LOOK_SENSITIVITY);
+    expect(saveLookSensitivity(null, 0.003)).toBe(false);
+    const broken: StorageLike = {
+      getItem: () => {
+        throw new Error('denied');
+      },
+      setItem: () => {
+        throw new Error('full');
+      },
+      removeItem: () => undefined,
+    };
+    expect(loadLookSensitivity(broken)).toBe(DEFAULT_LOOK_SENSITIVITY);
+    expect(saveLookSensitivity(broken, 0.003)).toBe(false);
+    expect(loadLookSensitivity(memoryStorage({ [LOOK_SENSITIVITY_KEY]: 'junk' }))).toBe(
+      DEFAULT_LOOK_SENSITIVITY,
+    );
+  });
+});
+
+describe('pointer modes', () => {
+  it('allows walking except after the lock is lost or released', () => {
+    expect(allowsMovement('idle')).toBe(true);
+    expect(allowsMovement('locked')).toBe(true);
+    expect(allowsMovement('fallback')).toBe(true);
+    expect(allowsMovement('lost')).toBe(false);
+    expect(allowsMovement('released')).toBe(false);
+  });
+
+  it('treats a lock that disappears as lost, but a deliberate release as released', () => {
+    expect(modeAfterLockChange('idle', true)).toBe('locked');
+    expect(modeAfterLockChange('lost', true)).toBe('locked');
+    expect(modeAfterLockChange('released', true)).toBe('locked');
+    expect(modeAfterLockChange('locked', false)).toBe('lost');
+    expect(modeAfterLockChange('released', false)).toBe('released');
+  });
+
+  it('falls back to click and drag when the first lock request fails', () => {
+    expect(modeAfterLockFailure('idle', false)).toBe('fallback');
+    expect(modeAfterLockFailure('lost', true)).toBe('lost');
+  });
+
+  it('shows no resume overlay when suspended, and asks for a click on resume', () => {
+    expect(modeOnSuspend('locked')).toBe('released');
+    expect(modeOnSuspend('lost')).toBe('released');
+    expect(modeOnSuspend('idle')).toBe('idle');
+    expect(modeOnSuspend('fallback')).toBe('fallback');
+    expect(modeOnResume('released')).toBe('lost');
+    expect(modeOnResume('idle')).toBe('idle');
   });
 });

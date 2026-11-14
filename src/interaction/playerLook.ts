@@ -5,49 +5,32 @@ export interface LookState {
   pitch: number;
 }
 
-export const MAX_PITCH = (30 * Math.PI) / 180;
-/** Cursor offsets (0..1 from the screen center) smaller than this do not turn. */
-export const DEAD_ZONE = 0.12;
-/** Turn rate in radians per second with the cursor at the screen edge. */
-export const MAX_YAW_RATE = 1.6;
-/** How quickly pitch follows the cursor height. Higher is snappier. */
-export const PITCH_FOLLOW = 6;
-/** Radians per pixel of mouse movement in Pointer Lock mode. */
-export const LOCKED_SENSITIVITY = 0.0022;
+export const MAX_PITCH = (75 * Math.PI) / 180;
+/** A single mouse event moving further than this many pixels on an axis is a browser glitch. */
+export const MAX_LOOK_DELTA = 200;
 
 function clampPitch(pitch: number): number {
   return Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pitch));
 }
 
-/** Eases the cursor offset past the dead zone: 0 inside it, 1 at the edge. */
-export function deadZoneCurve(offset: number): number {
-  const magnitude = Math.abs(offset);
-  if (magnitude <= DEAD_ZONE) return 0;
-  const t = Math.min(1, (magnitude - DEAD_ZONE) / (1 - DEAD_ZONE));
-  return Math.sign(offset) * t * t;
+function filterSpike(delta: number): number {
+  return Number.isFinite(delta) && Math.abs(delta) <= MAX_LOOK_DELTA ? delta : 0;
 }
 
 /**
- * Free-cursor look. `cursorX` and `cursorY` are in -1..1 from the screen center
- * (right and down are positive). Horizontal offset sets the turn rate; vertical
- * offset sets a target tilt that pitch eases toward.
+ * Direct mouse look: one mouse event, in pixels, turns the view by delta times
+ * `sensitivity` (radians per pixel). No smoothing, acceleration or dead zone.
+ * Moving right turns right, moving down looks down. An axis whose delta exceeds
+ * MAX_LOOK_DELTA is ignored; pitch is clamped to +/- MAX_PITCH.
  */
-export function stepFreeLook(
+export function applyLook(
   look: LookState,
-  cursorX: number,
-  cursorY: number,
-  delta: number,
+  movementX: number,
+  movementY: number,
+  sensitivity: number,
 ): LookState {
-  const yaw = look.yaw - deadZoneCurve(cursorX) * MAX_YAW_RATE * delta;
-  const targetPitch = clampPitch(-cursorY * MAX_PITCH);
-  const follow = 1 - Math.exp(-PITCH_FOLLOW * delta);
-  return { yaw, pitch: look.pitch + (targetPitch - look.pitch) * follow };
-}
-
-/** Pointer Lock look from raw mouse movement in pixels. */
-export function applyLockedLook(look: LookState, movementX: number, movementY: number): LookState {
   return {
-    yaw: look.yaw - movementX * LOCKED_SENSITIVITY,
-    pitch: clampPitch(look.pitch - movementY * LOCKED_SENSITIVITY),
+    yaw: look.yaw - filterSpike(movementX) * sensitivity,
+    pitch: clampPitch(look.pitch - filterSpike(movementY) * sensitivity),
   };
 }

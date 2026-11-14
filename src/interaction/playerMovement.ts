@@ -1,8 +1,9 @@
 import type { BoxCollider } from '../world/config';
 import { resolveCollisions, type Bounds, type Point } from './collision';
 
-export const WALK_SPEED = 3;
-export const FAST_SPEED_FACTOR = 1.8;
+/** Units per second. */
+export const WALK_SPEED = 2.0;
+export const SPRINT_SPEED = 3.2;
 /** Longest frame step in seconds, so a tab switch does not teleport the player. */
 export const MAX_DELTA = 0.1;
 
@@ -60,7 +61,7 @@ export function stepPlayer(
 ): Point {
   const length = Math.hypot(axes.forward, axes.strafe);
   if (length === 0) return position;
-  const speed = WALK_SPEED * (fast ? FAST_SPEED_FACTOR : 1);
+  const speed = fast ? SPRINT_SPEED : WALK_SPEED;
   const distance = speed * clampDelta(delta);
   const forward = (axes.forward / length) * distance;
   const strafe = (axes.strafe / length) * distance;

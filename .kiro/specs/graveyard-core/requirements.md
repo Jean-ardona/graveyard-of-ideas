@@ -6,8 +6,11 @@ A first-person 3D night graveyard where each resting project is a small book ins
 ## Requirement 1: Night world and navigation
 **User story:** As a user, I want to walk around a small night graveyard, so that my projects feel like places I can visit.
 1. WHEN the app starts for the first time THE SYSTEM SHALL show a navigable night scene with a partial, slightly blue moon, mist, a gate, paths, and exactly three tombs.
-2. WHEN the user moves the mouse THE SYSTEM SHALL turn the view without a held button, and SHALL offer an optional immersive mode using Pointer Lock.
-3. WHEN the user presses ZQSD, WASD or arrow keys THE SYSTEM SHALL move the player within the terrain bounds.
+2. WHEN the user clicks the scene or presses Enter THE SYSTEM SHALL request Pointer Lock, and WHILE the pointer is locked THE SYSTEM SHALL turn the view instantly by the mouse movement times a sensitivity (default 0.0022 rad/pixel, saved in the browser), with no smoothing, acceleration or dead zone, pitch limited to about 75 degrees up and down, any single mouse event larger than 200 pixels on an axis ignored, and a small dot shown at the center of the screen.
+   1. WHEN the lock is lost (Escape or focus loss) THE SYSTEM SHALL stop walking, release held keys and show a centered "Click to resume" prompt; a click or Enter locks again.
+   2. WHEN a menu, book or the grimoire needs the cursor THE SYSTEM SHALL be able to free the pointer and lock it again without showing the resume prompt while it is freed.
+   3. IF Pointer Lock is unavailable or rejected THEN THE SYSTEM SHALL turn the view by click and drag with the same response, keep walking enabled and show no resume prompt.
+3. WHEN the user presses ZQSD, WASD or arrow keys THE SYSTEM SHALL move the player within the terrain bounds at 2.0 units per second, or 3.2 units per second while Shift is held.
 4. THE SYSTEM SHALL prevent walking through tombs, the gate or the hut and SHALL prevent leaving the terrain.
 5. WHEN the player is near an interactive object THE SYSTEM SHALL show a discreet prompt for the available action.
 
