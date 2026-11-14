@@ -1,10 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { createProject, bury, allocateSlot, MAX_SLOTS } from '../domain';
-import type { Project } from '../domain';
+import * as fc from 'fast-check';
+import { buryNewProject, allocateSlot, MAX_SLOTS } from '../domain';
+import type { Project, ProjectInput } from '../domain';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+const NOW = '2026-11-14T12:00:00.000Z';
+const TEST_ID = 'test-id-fixed';
 
 function makeRestingProject(slot: number): Project {
   return {
@@ -16,8 +20,8 @@ function makeRestingProject(slot: number): Project {
     status: 'resting',
     slot,
     history: [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: NOW,
+    updatedAt: NOW,
   };
 }
 
@@ -25,76 +29,212 @@ function allSlotsOccupied(): Project[] {
   return Array.from({ length: MAX_SLOTS }, (_, i) => makeRestingProject(i));
 }
 
+function validInput(overrides: Partial<ProjectInput> = {}): ProjectInput {
+  return { title: 'Ghost Ship', description: 'An old idea.', ...overrides };
+}
+
 // ---------------------------------------------------------------------------
-// createProject
+// buryNewProject — happy path
 // ---------------------------------------------------------------------------
 
-describe('createProject', () => {
-  it('creates a project with the supplied title and description', () => {
-    const p = createProject({ title: 'Ghost Ship', description: 'An old idea.' });
-    expect(p.title).toBe('Ghost Ship');
-    expect(p.description).toBe('An old idea.');
+describe('buryNewProject — success', () => {
+  it('returns ok:true with the project and updated projects array', () => {
+    const result = buryNewProject(validInput(), [], { now: NOW, id: TEST_ID });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.project.id).toBe(TEST_ID);
+    expect(result.projects).toHaveLength(1);
+    expect(result.projects[0]).toBe(result.project);
   });
 
-  it('generates a non-empty unique id', () => {
-    const a = createProject({ title: 'A', description: 'a' });
-    const b = createProject({ title: 'B', description: 'b' });
-    expect(a.id).toBeTruthy();
-    expect(b.id).toBeTruthy();
-    expect(a.id).not.toBe(b.id);
+  it('stores trimmed title and description', () => {
+    const result = buryNewProject(
+      validInput({ title: '  Ghost Ship  ', description: '  An old idea.  ' }),
+      [],
+      { now: NOW, id: TEST_ID },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.project.title).toBe('Ghost Ship');
+    expect(result.project.description).toBe('An old idea.');
   });
 
-  it('sets status to resting', () => {
-    const p = createProject({ title: 'T', description: 'D' });
-    expect(p.status).toBe('resting');
+  it('assigns slot 0 on an empty graveyard', () => {
+    const result = buryNewProject(validInput(), [], { now: NOW });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.project.slot).toBe(0);
+  });
+
+  it('assigns the first free slot when some are taken', () => {
+    const existing = [makeRestingProject(0), makeRestingProject(1)];
+    const result = buryNewProject(validInput(), existing, { now: NOW });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.project.slot).toBe(2);
+  });
+
+  it('status is always resting', () => {
+    const result = buryNewProject(validInput(), [], { now: NOW });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.project.status).toBe('resting');
+  });
+
+  it('sets createdAt, updatedAt and buriedAt to the injected timestamp', () => {
+    const result = buryNewProject(validInput(), [], { now: NOW });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.project.createdAt).toBe(NOW);
+    expect(result.project.updatedAt).toBe(NOW);
+    expect(result.project.buriedAt).toBe(NOW);
+  });
+
+  it('records a created and a buried history entry', () => {
+    const result = buryNewProject(validInput(), [], { now: NOW });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const kinds = result.project.history.map((h) => h.kind);
+    expect(kinds).toContain('created');
+    expect(kinds).toContain('buried');
   });
 
   it('defaults notes to empty string and links to empty array', () => {
-    const p = createProject({ title: 'T', description: 'D' });
-    expect(p.notes).toBe('');
-    expect(p.links).toEqual([]);
+    const result = buryNewProject(validInput(), [], { now: NOW });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.project.notes).toBe('');
+    expect(result.project.links).toEqual([]);
   });
 
   it('accepts optional fields', () => {
-    const p = createProject({
-      title: 'T',
-      description: 'D',
-      goal: 'g',
-      abandonReason: 'r',
-      epitaph: 'e',
-      notes: 'n',
-      links: ['https://example.com'],
-    });
-    expect(p.goal).toBe('g');
-    expect(p.abandonReason).toBe('r');
-    expect(p.epitaph).toBe('e');
-    expect(p.notes).toBe('n');
-    expect(p.links).toEqual(['https://example.com']);
+    const result = buryNewProject(
+      validInput({ goal: 'g', abandonReason: 'r', epitaph: 'e', notes: 'n', links: ['https://x.com'] }),
+      [],
+      { now: NOW },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.project.goal).toBe('g');
+    expect(result.project.abandonReason).toBe('r');
+    expect(result.project.epitaph).toBe('e');
+    expect(result.project.notes).toBe('n');
+    expect(result.project.links).toEqual(['https://x.com']);
   });
 
-  it('sets createdAt and updatedAt as ISO timestamps', () => {
-    const before = new Date().toISOString();
-    const p = createProject({ title: 'T', description: 'D' });
-    const after = new Date().toISOString();
-    expect(p.createdAt >= before).toBe(true);
-    expect(p.createdAt <= after).toBe(true);
-    expect(p.updatedAt).toBe(p.createdAt);
+  it('allows an empty abandonReason (Requirement 3.5)', () => {
+    const result = buryNewProject(
+      validInput({ abandonReason: undefined }),
+      [],
+      { now: NOW },
+    );
+    expect(result.ok).toBe(true);
   });
 
-  it('adds a created history entry', () => {
-    const p = createProject({ title: 'T', description: 'D' });
-    expect(p.history).toHaveLength(1);
-    expect(p.history[0]?.kind).toBe('created');
-  });
-
-  it('does not assign a slot', () => {
-    const p = createProject({ title: 'T', description: 'D' });
-    expect(p.slot).toBeUndefined();
+  it('generates unique ids without the id override', () => {
+    const a = buryNewProject(validInput({ title: 'A' }), []);
+    const b = buryNewProject(validInput({ title: 'B' }), []);
+    expect(a.ok && b.ok).toBe(true);
+    if (!a.ok || !b.ok) return;
+    expect(a.project.id).not.toBe(b.project.id);
   });
 });
 
 // ---------------------------------------------------------------------------
-// allocateSlot
+// buryNewProject — validation errors
+// ---------------------------------------------------------------------------
+
+describe('buryNewProject — invalid input', () => {
+  it('returns invalid_title for an empty title', () => {
+    const result = buryNewProject(validInput({ title: '' }), []);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBe('invalid_title');
+  });
+
+  it('returns invalid_title for a whitespace-only title', () => {
+    const result = buryNewProject(validInput({ title: '   ' }), []);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBe('invalid_title');
+  });
+
+  it('returns invalid_description for an empty description', () => {
+    const result = buryNewProject(validInput({ description: '' }), []);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBe('invalid_description');
+  });
+
+  it('returns invalid_description for a whitespace-only description', () => {
+    const result = buryNewProject(validInput({ description: '\t\n' }), []);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBe('invalid_description');
+  });
+
+  it('does not mutate the projects array on invalid input', () => {
+    const projects: Project[] = [];
+    buryNewProject(validInput({ title: '' }), projects);
+    expect(projects).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buryNewProject — graveyard full
+// ---------------------------------------------------------------------------
+
+describe('buryNewProject — graveyard full', () => {
+  it('returns graveyard_full when all 12 slots are taken', () => {
+    const result = buryNewProject(validInput(), allSlotsOccupied());
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBe('graveyard_full');
+  });
+
+  it('does not mutate the input projects array when full', () => {
+    const projects = allSlotsOccupied();
+    const lengthBefore = projects.length;
+    buryNewProject(validInput(), projects);
+    expect(projects).toHaveLength(lengthBefore);
+  });
+
+  it('succeeds after a slot is freed', () => {
+    // 11 occupied (slots 1–11), slot 0 is free
+    const projects = Array.from({ length: MAX_SLOTS - 1 }, (_, i) => makeRestingProject(i + 1));
+    const result = buryNewProject(validInput(), projects, { now: NOW });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.project.slot).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buryNewProject — no mutation of the input array
+// ---------------------------------------------------------------------------
+
+describe('buryNewProject — immutability', () => {
+  it('returns a new projects array, not the original', () => {
+    const original: Project[] = [];
+    const result = buryNewProject(validInput(), original, { now: NOW });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.projects).not.toBe(original);
+    expect(original).toHaveLength(0);
+  });
+
+  it('preserves existing projects in the returned array', () => {
+    const existing = [makeRestingProject(0)];
+    const result = buryNewProject(validInput(), existing, { now: NOW });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.projects).toHaveLength(2);
+    expect(result.projects[0]).toBe(existing[0]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// allocateSlot (unchanged, kept for regression)
 // ---------------------------------------------------------------------------
 
 describe('allocateSlot', () => {
@@ -102,7 +242,7 @@ describe('allocateSlot', () => {
     expect(allocateSlot([])).toBe(0);
   });
 
-  it('returns the first free slot when some slots are taken', () => {
+  it('returns the first free slot when some are taken', () => {
     const projects = [makeRestingProject(0), makeRestingProject(1), makeRestingProject(3)];
     expect(allocateSlot(projects)).toBe(2);
   });
@@ -116,85 +256,49 @@ describe('allocateSlot', () => {
   it('returns null when all 12 slots are occupied', () => {
     expect(allocateSlot(allSlotsOccupied())).toBeNull();
   });
-
-  it('returns 0 when all slots above 0 are taken', () => {
-    const projects = Array.from({ length: MAX_SLOTS - 1 }, (_, i) => makeRestingProject(i + 1));
-    expect(allocateSlot(projects)).toBe(0);
-  });
 });
 
 // ---------------------------------------------------------------------------
-// bury
+// Property-based test: no resting project in the result ever lacks a slot
 // ---------------------------------------------------------------------------
 
-describe('bury', () => {
-  it('returns ok:true with a slot assigned when slots are available', () => {
-    const p = createProject({ title: 'T', description: 'D' });
-    const result = bury(p, []);
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.project.slot).toBe(0);
-    }
+describe('buryNewProject — property: every resting project has a slot', () => {
+  it('holds for any valid input and any starting graveyard configuration', () => {
+    fc.assert(
+      fc.property(
+        // Arbitrary title and description (non-empty after trim, guaranteed by the generator)
+        fc.string({ minLength: 1 }).filter((s) => s.trim().length > 0),
+        fc.string({ minLength: 1 }).filter((s) => s.trim().length > 0),
+        // Arbitrary number of occupied slots (0 to MAX_SLOTS - 1) so there is always room
+        fc.integer({ min: 0, max: MAX_SLOTS - 1 }),
+        (title, description, occupiedCount) => {
+          const existing = Array.from({ length: occupiedCount }, (_, i) => makeRestingProject(i));
+          const result = buryNewProject({ title, description }, existing);
+          if (!result.ok) return; // graveyard_full would only happen if occupiedCount === MAX_SLOTS, excluded above
+          for (const p of result.projects) {
+            if (p.status === 'resting') {
+              expect(p.slot).toBeDefined();
+              expect(typeof p.slot).toBe('number');
+            }
+          }
+        },
+      ),
+      { numRuns: 200 },
+    );
   });
 
-  it('assigns the first free slot', () => {
-    const p = createProject({ title: 'T', description: 'D' });
-    const existing = [makeRestingProject(0), makeRestingProject(1)];
-    const result = bury(p, existing);
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.project.slot).toBe(2);
-    }
-  });
-
-  it('returns no_free_slot error when all slots are taken', () => {
-    const p = createProject({ title: 'T', description: 'D' });
-    const result = bury(p, allSlotsOccupied());
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error).toBe('no_free_slot');
-    }
-  });
-
-  it('does not mutate the input project', () => {
-    const p = createProject({ title: 'T', description: 'D' });
-    const slotBefore = p.slot;
-    const historyLengthBefore = p.history.length;
-    bury(p, []);
-    expect(p.slot).toBe(slotBefore);
-    expect(p.history).toHaveLength(historyLengthBefore);
-  });
-
-  it('appends a buried history entry', () => {
-    const p = createProject({ title: 'T', description: 'D' });
-    const result = bury(p, []);
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      const buried = result.project.history.find((h) => h.kind === 'buried');
-      expect(buried).toBeDefined();
-    }
-  });
-
-  it('sets buriedAt and updates updatedAt', () => {
-    const before = new Date().toISOString();
-    const p = createProject({ title: 'T', description: 'D' });
-    const result = bury(p, []);
-    const after = new Date().toISOString();
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.project.buriedAt).toBeDefined();
-      expect(result.project.buriedAt! >= before).toBe(true);
-      expect(result.project.buriedAt! <= after).toBe(true);
-      expect(result.project.updatedAt >= before).toBe(true);
-    }
-  });
-
-  it('keeps status as resting', () => {
-    const p = createProject({ title: 'T', description: 'D' });
-    const result = bury(p, []);
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.project.status).toBe('resting');
-    }
+  it('holds even when the call fails: the original projects array is unchanged', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: MAX_SLOTS }),
+        (occupiedCount) => {
+          const existing = Array.from({ length: occupiedCount }, (_, i) => makeRestingProject(i));
+          const snapshot = JSON.stringify(existing);
+          buryNewProject({ title: 'T', description: 'D' }, existing);
+          expect(JSON.stringify(existing)).toBe(snapshot);
+        },
+      ),
+      { numRuns: 100 },
+    );
   });
 });

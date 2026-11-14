@@ -1,7 +1,11 @@
 import { Project } from './types';
 import { allocateSlot } from './slots';
 
-export interface CreateProjectInput {
+// ---------------------------------------------------------------------------
+// Input types
+// ---------------------------------------------------------------------------
+
+export interface ProjectInput {
   title: string;
   description: string;
   goal?: string;
@@ -11,52 +15,120 @@ export interface CreateProjectInput {
   links?: string[];
 }
 
+/** Injectable options — used by tests to make time and id deterministic. */
+export interface ProjectCreateOptions {
+  now?: string;  // ISO timestamp override
+  id?: string;   // UUID override
+}
+
+// ---------------------------------------------------------------------------
+// Result types
+// ---------------------------------------------------------------------------
+
+export type BuryNewProjectResult =
+  | { ok: true; project: Project; projects: Project[] }
+  | { ok: false; error: 'invalid_title' | 'invalid_description' | 'graveyard_full' };
+
+// ---------------------------------------------------------------------------
+// Internal factory — not exported from index.ts
+// ---------------------------------------------------------------------------
+
 /**
- * Builds a new Project shell. Status is 'resting' (burial is the only entry point).
- * No slot is assigned here — call bury() to assign one.
+ * Builds a fully-buried Project in a single step.
+ * Internal: callers outside this module must use buryNewProject().
  */
-export function createProject(input: CreateProjectInput): Project {
-  const now = new Date().toISOString();
+function createBuriedProject(
+  input: ProjectInput,
+  slot: number,
+  opts: ProjectCreateOptions = {},
+): Project {
+  const now = opts.now ?? new Date().toISOString();
+  const id = opts.id ?? crypto.randomUUID();
   return {
-    id: crypto.randomUUID(),
-    title: input.title,
-    description: input.description,
+    id,
+    title: input.title.trim(),
+    description: input.description.trim(),
     goal: input.goal,
     abandonReason: input.abandonReason,
     epitaph: input.epitaph,
     notes: input.notes ?? '',
     links: input.links ?? [],
     status: 'resting',
-    history: [{ at: now, kind: 'created' }],
+    slot,
+    history: [
+      { at: now, kind: 'created' },
+      { at: now, kind: 'buried' },
+    ],
     createdAt: now,
     updatedAt: now,
+    buriedAt: now,
   };
 }
 
-export type BuryResult =
-  | { ok: true; project: Project }
-  | { ok: false; error: 'no_free_slot' };
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
 /**
- * Assigns a free grave slot to a project, records burial timestamp and history entry.
- * Pure: does not mutate the input project.
- * Returns { ok: false, error: 'no_free_slot' } when all 12 slots are taken.
+ * Validates input, allocates a free grave slot, and creates a resting project
+ * atomically. The input is never persisted on failure.
+ *
+ * Returns:
+ *   { ok: true,  project, projects } — new project appended to a new array
+ *   { ok: false, error }             — 'invalid_title' | 'invalid_description' | 'graveyard_full'
  */
-export function bury(project: Project, projects: Project[]): BuryResult {
-  const slot = allocateSlot(projects);
-  if (slot === null) {
-    return { ok: false, error: 'no_free_slot' };
+export function buryNewProject(
+  input: ProjectInput,
+  projects: Project[],
+  opts: ProjectCreateOptions = {},
+): BuryNewProjectResult {
+  if (!input.title || input.title.trim() === '') {
+    return { ok: false, error: 'invalid_title' };
+  }
+  if (!input.description || input.description.trim() === '') {
+    return { ok: false, error: 'invalid_description' };
   }
 
-  const now = new Date().toISOString();
-  const updated: Project = {
-    ...project,
-    slot,
-    status: 'resting',
-    buriedAt: now,
-    updatedAt: now,
-    history: [...project.history, { at: now, kind: 'buried' }],
-  };
+  const slot = allocateSlot(projects);
+  if (slot === null) {
+    return { ok: false, error: 'graveyard_full' };
+  }
 
-  return { ok: true, project: updated };
+  const project = createBuriedProject(input, slot, opts);
+  return { ok: true, project, projects: [...projects, project] };
+}
+
+// ---------------------------------------------------------------------------
+// Lower-level helpers (used internally by resurrect / restAgain in task 2.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Assigns a free grave slot to an existing project (e.g. for restAgain).
+ * Pure: does not mutate the input project.
+ */
+export type ReburyResult =
+  | { ok: true; project: Project }
+  | { ok: false; error: 'graveyard_full' };
+
+export function rebury(
+  project: Project,
+  projects: Project[],
+  opts: ProjectCreateOptions = {},
+): ReburyResult {
+  const slot = allocateSlot(projects);
+  if (slot === null) {
+    return { ok: false, error: 'graveyard_full' };
+  }
+  const now = opts.now ?? new Date().toISOString();
+  return {
+    ok: true,
+    project: {
+      ...project,
+      slot,
+      status: 'resting',
+      buriedAt: now,
+      updatedAt: now,
+      history: [...project.history, { at: now, kind: 'buried' }],
+    },
+  };
 }

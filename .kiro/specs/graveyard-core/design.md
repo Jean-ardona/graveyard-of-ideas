@@ -22,8 +22,13 @@ interface AppData { schemaVersion: number; projects: Project[]; seeded: boolean;
 ```
 
 ## Domain functions (pure, tested)
-createProject, bury (assigns free slot), resurrect (requires nextAction, clears slot), restAgain, honor, remove, allocateSlot, exportData, importData (validate + migrate).
-Invariants: a project exists exactly once; a slot is used by at most one resting project; only resting projects hold a slot; resurrect never duplicates.
+`buryNewProject(input, projects, opts?)` — the single entry point for creation. Validates (title and description required, non-empty after trimming), allocates a free slot, and builds a resting project atomically. Returns `{ ok: true, project, projects }` or `{ ok: false, error: 'invalid_title' | 'invalid_description' | 'graveyard_full' }`. Input is never persisted on failure. The `opts` parameter accepts `{ now?, id? }` for deterministic testing.
+
+`rebury(project, projects, opts?)` — re-assigns a slot to an existing project (used by `restAgain`). Pure, no mutation.
+
+`resurrect`, `restAgain`, `honor`, `remove`, `allocateSlot`, `exportData`, `importData` (validate + migrate) — implemented in later tasks.
+
+Invariants: a project exists exactly once; a slot is used by at most one resting project; **every resting project must have a slot** (enforced by `buryNewProject` — no slotless resting project can be created); resurrect never duplicates.
 
 ## Grave slots
 A fixed list of slot positions on the terrain (e.g. 12). Tombs are rendered from resting projects by slot. Tomb shapes vary by slot (rounded, rectangular, worn) chosen deterministically.
