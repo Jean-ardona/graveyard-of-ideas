@@ -52,6 +52,9 @@ export const COLORS = {
   moonPool: '#9db4e0',
   star: '#dfe8ff',
   mound: '#1f2838',
+  tombRecess: '#06080d',
+  engraving: '#2b3347',
+  engravingEdge: '#a3adc2',
   /** The only warm tone in the scene. */
   lantern: '#ffe9a8',
 } as const;
@@ -92,7 +95,7 @@ export const PATHS: readonly PathDef[] = [
   },
 ];
 
-/** 12 grave slots, each beside a path and facing it. Tombs are not rendered yet. */
+/** 12 grave slots, each beside a path and facing it. */
 export const GRAVE_SLOTS: readonly GraveSlot[] = [
   { x: -3.2, z: 12, rotation: 1.57 },
   { x: 3.2, z: 12, rotation: -1.57 },
@@ -140,17 +143,9 @@ const HUT_COLLIDER: BoxCollider = {
   rotation: 0,
 };
 
-/** Footprint a tomb will occupy on its slot. */
-const SLOT_COLLIDERS: readonly BoxCollider[] = GRAVE_SLOTS.map((slot) => ({
-  x: slot.x,
-  z: slot.z,
-  halfWidth: 0.8,
-  halfDepth: 1.3,
-  rotation: slot.rotation,
-}));
+/** Half extents of a tomb footprint (its base). Each tomb registers its own collider. */
+export const TOMB_HALF_WIDTH = 0.8;
+export const TOMB_HALF_DEPTH = 0.45;
 
-export const COLLIDERS: readonly BoxCollider[] = [
-  ...GATE_COLLIDERS,
-  HUT_COLLIDER,
-  ...SLOT_COLLIDERS,
-];
+/** Fixed obstacles. Tomb colliders are added at runtime while a tomb exists. */
+export const COLLIDERS: readonly BoxCollider[] = [...GATE_COLLIDERS, HUT_COLLIDER];

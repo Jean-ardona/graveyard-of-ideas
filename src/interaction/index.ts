@@ -3,4 +3,5 @@ export { default as InteractionController } from './InteractionController';
 export { releasePointer, requestPointer, usePointerMode } from './pointerLock';
 export type { PointerMode } from './pointerLock';
 export { registerActionHandler, registerInteractable, useFocused } from './interactionState';
+export { registerCollider } from './colliderRegistry';
 export type { Interactable } from './interactables';

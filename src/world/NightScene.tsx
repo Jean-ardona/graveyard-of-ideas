@@ -13,6 +13,7 @@ import Paths from './Paths';
 import MoonPool from './MoonPool';
 import SlotMarks from './SlotMarks';
 import Stars from './Stars';
+import Tombs from './Tombs';
 import StonesAndBushes from './StonesAndBushes';
 import GroundMesh from './GroundMesh';
 
@@ -51,6 +52,7 @@ export default function NightScene({ preset, quality, playerEnabled = true }: Ni
       <Paths />
       <MoonPool />
       <SlotMarks />
+      <Tombs />
       <Gate />
       <Hut />
     </>

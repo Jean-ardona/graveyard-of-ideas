@@ -12,6 +12,7 @@ import type { RenderStats } from './world/renderStats';
 import ControlsHint from './ui/ControlsHint';
 import PointerHud from './ui/PointerHud';
 import InteractionPrompt from './ui/InteractionPrompt';
+import { useDemoProjectsKey } from './ui/useDemoProjectsKey';
 
 /** Returns true if the browser can create a WebGL context. */
 function isWebGLAvailable(): boolean {
@@ -55,6 +56,8 @@ export default function App() {
   const quality = useAppStore((state) => state.data.prefs.quality);
   const reducedMotion = useAppStore((state) => state.data.prefs.reducedMotion);
   const preset = useMemo(() => resolvePreset(quality, reducedMotion), [quality, reducedMotion]);
+
+  useDemoProjectsKey();
 
   const cycleQuality = useCallback(() => {
     appStore.getState().setQuality(nextQuality(appStore.getState().data.prefs.quality));

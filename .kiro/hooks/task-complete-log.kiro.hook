@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Log Completed Task",
+  "description": "When a tasks.md file is saved and a task was just marked complete, appends one short entry to docs/KIRO_LOG.md and modifies no other file.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      ".kiro/specs/**/tasks.md"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "The spec file tasks.md was just saved. Find any task that is newly marked complete ([x]) and has no entry yet in docs/KIRO_LOG.md (read that file first, if it exists, and match by task number and title). If no task was newly completed, or all completed tasks are already logged, do nothing and reply with one short sentence. Otherwise, for each newly completed task, append one short entry to docs/KIRO_LOG.md (create the file with a \"# Kiro Log\" heading if it does not exist) using this format: \"## YYYY-MM-DD, Task N: Title\" followed by four short lines: \"Requirements covered:\" (the requirement numbers the task references in tasks.md and the spec's requirements.md), \"Steering and property tests:\" (which steering rules in .kiro/steering or which property tests, by name, mattered), \"Open decisions:\" (any decision the spec did not settle and how it was resolved, or \"none\"). Use today's date. Keep each entry brief and in English. Only append to docs/KIRO_LOG.md. Do not modify tasks.md or any other file."
+  }
+}

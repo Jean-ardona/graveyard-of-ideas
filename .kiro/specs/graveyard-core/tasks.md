@@ -27,7 +27,7 @@ Build Graveyard of Ideas in layers: pure domain logic first (cheap, GPU-free, pr
   - [x] 4.4 Quality presets, default Low. Checkpoint: measure on the target machine. _Requirements: 8.1_
 
 - [ ] 5. Tombs and book
-  - [ ] 5.1 Tomb with slab and cavity, rendered from resting projects by slot. _Requirements: 2.1_
+  - [x] 5.1 Tomb with slab and cavity, rendered from resting projects by slot. _Requirements: 2.1_
   - [ ] 5.2 3D book model with embedded HTML pages and four parts, autosaved edits. _Requirements: 2.3, 2.4_
   - [ ] 5.3 UI state machine; open/close sequences; reading mode; Escape handling. _Requirements: 2, 9_
 

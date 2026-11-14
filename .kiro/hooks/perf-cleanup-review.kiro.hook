@@ -1,0 +1,19 @@
+{
+  "enabled": true,
+  "name": "Perf and Cleanup Review",
+  "description": "On save of files in src/world or src/cinematics, reviews them for disposal, render-loop allocation, instancing and listener cleanup problems, and reports findings without editing.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "src/world/**/*.ts",
+      "src/world/**/*.tsx",
+      "src/cinematics/**/*.ts",
+      "src/cinematics/**/*.tsx"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Review the file that was just saved, for performance and cleanup problems only. Check for: 1) geometries, materials and textures that are created but never disposed; 2) objects (Vector3, Color, geometries, materials, arrays, closures) created inside useFrame or other render-loop callbacks; 3) repeated objects of the same kind that should use instancing (InstancedMesh or drei Instances); 4) event listeners, timers, animation frames or subscriptions that are added but not removed in a cleanup function. Ignore style, naming, features and anything unrelated to these four points. Do NOT edit any file. Report findings briefly as a short list with the line or symbol and a one-line explanation. If there are no problems, reply with one short sentence saying so."
+  }
+}

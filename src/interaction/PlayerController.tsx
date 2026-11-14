@@ -1,11 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import {
-  COLLIDERS,
-  EYE_HEIGHT,
-  PLAYER_BOUNDS,
-  PLAYER_RADIUS,
-} from '../world/config';
+import { EYE_HEIGHT, PLAYER_BOUNDS, PLAYER_RADIUS } from '../world/config';
+import { getColliders } from './colliderRegistry';
 import { terrainHeight } from '../world/terrain';
 import type { Point } from './collision';
 import { clampDelta, keysToAxes, stepPlayer } from './playerMovement';
@@ -38,7 +34,7 @@ export default function PlayerController({ enabled = true }: { enabled?: boolean
         state.fast,
         clampDelta(rawDelta),
         PLAYER_RADIUS,
-        COLLIDERS,
+        getColliders(),
         PLAYER_BOUNDS,
       );
     }

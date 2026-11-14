@@ -29,6 +29,8 @@ import {
   COLLIDERS,
   GATE_POSITION,
   GRAVE_SLOTS,
+  TOMB_HALF_DEPTH,
+  TOMB_HALF_WIDTH,
   HUT_POSITION,
   PLAYER_BOUNDS,
   PLAYER_RADIUS,
@@ -139,14 +141,23 @@ describe('collisions', () => {
   });
 
   it('blocks every tomb footprint', () => {
+    const tombColliders = GRAVE_SLOTS.map((slot) => ({
+      x: slot.x,
+      z: slot.z,
+      halfWidth: TOMB_HALF_WIDTH,
+      halfDepth: TOMB_HALF_DEPTH,
+      rotation: slot.rotation,
+    }));
     for (const slot of GRAVE_SLOTS) {
       const pushed = resolveCollisions(
         { x: slot.x, z: slot.z },
         PLAYER_RADIUS,
-        COLLIDERS,
+        [...COLLIDERS, ...tombColliders],
         PLAYER_BOUNDS,
       );
-      expect(Math.hypot(pushed.x - slot.x, pushed.z - slot.z)).toBeGreaterThan(0.8);
+      expect(Math.hypot(pushed.x - slot.x, pushed.z - slot.z)).toBeGreaterThanOrEqual(
+        TOMB_HALF_DEPTH + PLAYER_RADIUS - 1e-6,
+      );
     }
   });
 
