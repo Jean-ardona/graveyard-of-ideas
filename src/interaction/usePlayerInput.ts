@@ -2,6 +2,7 @@ import { useEffect, useRef, type MutableRefObject } from 'react';
 import { browserStorage, DEFAULT_LOOK_SENSITIVITY, loadLookSensitivity } from '../store';
 import { applyLook, type LookState } from './playerLook';
 import { MOVEMENT_KEYS } from './playerMovement';
+import { playerSession } from './playerSession';
 import {
   allowsMovement,
   attachPointerTarget,
@@ -32,7 +33,7 @@ export function usePlayerInput(
   const input = useRef<PlayerInput>({
     keys: new Set(),
     fast: false,
-    look: { yaw: 0, pitch: 0 },
+    look: { yaw: playerSession.yaw, pitch: playerSession.pitch },
     sensitivity: DEFAULT_LOOK_SENSITIVITY,
   });
 

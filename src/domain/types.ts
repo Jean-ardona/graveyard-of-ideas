@@ -28,11 +28,16 @@ export interface Project {
   resurrectedAt?: string;
 }
 
+export type QualityLevel = 'low' | 'medium' | 'high';
+
+/** Quality levels from lightest to heaviest. */
+export const QUALITY_LEVELS: readonly QualityLevel[] = ['low', 'medium', 'high'];
+
 export interface AppData {
   schemaVersion: number;
   projects: Project[];
   seeded: boolean;
-  prefs: { quality: 'low' | 'medium' | 'high'; reducedMotion: boolean };
+  prefs: { quality: QualityLevel; reducedMotion: boolean };
 }
 
 export const MAX_SLOTS = 12;

@@ -3,14 +3,13 @@ import { COLORS } from './config';
 import { useDisposable } from './geometryUtils';
 import { createRandom } from './layout';
 
-const STAR_COUNT = 150;
 const STAR_RADIUS = 150;
 
 /** Stars scattered over the upper sky dome, in a single Points object. */
-function createStarGeometry(): THREE.BufferGeometry {
+function createStarGeometry(count: number): THREE.BufferGeometry {
   const random = createRandom(101);
-  const positions = new Float32Array(STAR_COUNT * 3);
-  for (let i = 0; i < STAR_COUNT; i++) {
+  const positions = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
     const azimuth = random() * Math.PI * 2;
     const height = 0.12 + random() * 0.88;
     const ring = Math.sqrt(1 - height * height);
@@ -23,8 +22,8 @@ function createStarGeometry(): THREE.BufferGeometry {
   return geometry;
 }
 
-export default function Stars() {
-  const geometry = useDisposable(createStarGeometry);
+export default function Stars({ count }: { count: number }) {
+  const geometry = useDisposable(() => createStarGeometry(count), [count]);
   return (
     <points geometry={geometry} frustumCulled={false}>
       <pointsMaterial

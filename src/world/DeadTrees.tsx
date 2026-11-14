@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import * as THREE from 'three';
 import { COLORS } from './config';
 import { mergeParts, placed, useDisposable } from './geometryUtils';
@@ -21,7 +22,8 @@ function createDeadTreeGeometry(): THREE.BufferGeometry {
   ]);
 }
 
-export default function DeadTrees() {
+export default function DeadTrees({ count }: { count: number }) {
   const geometry = useDisposable(createDeadTreeGeometry);
-  return <Instances geometry={geometry} color={COLORS.wood} placements={TREE_PLACEMENTS} />;
+  const placements = useMemo(() => TREE_PLACEMENTS.slice(0, count), [count]);
+  return <Instances geometry={geometry} color={COLORS.wood} placements={placements} />;
 }

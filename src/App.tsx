@@ -1,6 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
+import type * as THREE from 'three';
+import type { QualityLevel } from './domain';
+import { appStore, useAppStore } from './store/appStore';
 import NightScene from './world/NightScene';
+import { nextQuality, qualityLabel, resolvePreset } from './world/quality';
+import QualityNotice from './ui/QualityNotice';
 import FpsTracker from './world/FpsTracker';
 import FpsCounter from './world/FpsCounter';
 import type { RenderStats } from './world/renderStats';
@@ -37,37 +42,48 @@ const FALLBACK_STYLE: React.CSSProperties = {
   padding: '2rem',
 };
 
+const NOTICE_MS = 5000;
+
 export default function App() {
   const statsRef = useRef<RenderStats>({ fps: 0, calls: 0 });
   const [webglOk] = useState<boolean>(() => isWebGLAvailable());
   const [contextLost, setContextLost] = useState(false);
-  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const liveCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Listen for WebGL context loss on the canvas element.
-  useEffect(() => {
-    if (!webglOk) return;
-    const container = canvasContainerRef.current;
-    if (!container) return;
+  const quality = useAppStore((state) => state.data.prefs.quality);
+  const reducedMotion = useAppStore((state) => state.data.prefs.reducedMotion);
+  const preset = useMemo(() => resolvePreset(quality, reducedMotion), [quality, reducedMotion]);
 
-    function onContextLost(e: Event) {
-      e.preventDefault(); // prevent automatic restore attempt
+  const cycleQuality = useCallback(() => {
+    appStore.getState().setQuality(nextQuality(appStore.getState().data.prefs.quality));
+  }, []);
+
+  const lowerQualityAutomatically = useCallback((lighter: QualityLevel) => {
+    appStore.getState().setQuality(lighter);
+    setNotice(`Quality lowered to ${qualityLabel(lighter)} to keep the night smooth.`);
+    if (noticeTimer.current !== null) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), NOTICE_MS);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (noticeTimer.current !== null) clearTimeout(noticeTimer.current);
+    },
+    [],
+  );
+
+  /** Tracks the live canvas and reports its context loss. A replaced canvas is ignored. */
+  const watchCanvas = useCallback(({ gl }: { gl: THREE.WebGLRenderer }) => {
+    const canvas = gl.domElement;
+    liveCanvasRef.current = canvas;
+    canvas.addEventListener('webglcontextlost', (event) => {
+      if (liveCanvasRef.current !== canvas) return;
+      event.preventDefault(); // prevent automatic restore attempt
       setContextLost(true);
-    }
-
-    // The canvas is a child of the container div; wait one tick for R3F to mount it.
-    const timer = setTimeout(() => {
-      const gl = container.querySelector('canvas');
-      if (gl) {
-        gl.addEventListener('webglcontextlost', onContextLost);
-      }
-    }, 0);
-
-    return () => {
-      clearTimeout(timer);
-      const gl = container.querySelector('canvas');
-      if (gl) gl.removeEventListener('webglcontextlost', onContextLost);
-    };
-  }, [webglOk]);
+    });
+  }, []);
 
   if (!webglOk) {
     return (
@@ -111,18 +127,23 @@ export default function App() {
 
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#1a2238' }}>
-      <div ref={canvasContainerRef} style={{ width: '100%', height: '100%' }}>
+      <div style={{ width: '100%', height: '100%' }}>
+        {/* Antialiasing is fixed when a WebGL context is created, so the canvas is recreated when it changes. */}
         <Canvas
-          dpr={1}
+          key={preset.antialias ? 'antialias' : 'plain'}
+          dpr={[1, preset.pixelRatioCap]}
+          gl={{ antialias: preset.antialias }}
           shadows={false}
           camera={{ fov: 60, near: 0.1, far: 200 }}
           style={{ width: '100%', height: '100%' }}
+          onCreated={watchCanvas}
         >
-          <NightScene />
-          <FpsTracker statsRef={statsRef} />
+          <NightScene preset={preset} quality={quality} />
+          <FpsTracker statsRef={statsRef} quality={quality} onAutoLower={lowerQualityAutomatically} />
         </Canvas>
       </div>
-      <FpsCounter statsRef={statsRef} />
+      <FpsCounter statsRef={statsRef} quality={quality} onCycleQuality={cycleQuality} />
+      <QualityNotice message={notice} />
       <PointerHud />
       <InteractionPrompt />
       <ControlsHint />

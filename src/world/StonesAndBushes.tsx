@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import * as THREE from 'three';
 import { COLORS } from './config';
 import { useDisposable } from './geometryUtils';
@@ -18,13 +19,16 @@ function createBushGeometry(): THREE.BufferGeometry {
   return geometry;
 }
 
-export default function StonesAndBushes() {
+/** Stones come from the preset; there is one bush for every two stones. */
+export default function StonesAndBushes({ stoneCount }: { stoneCount: number }) {
   const stone = useDisposable(createStoneGeometry);
   const bush = useDisposable(createBushGeometry);
+  const stones = useMemo(() => STONE_PLACEMENTS.slice(0, stoneCount), [stoneCount]);
+  const bushes = useMemo(() => BUSH_PLACEMENTS.slice(0, Math.ceil(stoneCount / 2)), [stoneCount]);
   return (
     <>
-      <Instances geometry={stone} color={COLORS.stone} placements={STONE_PLACEMENTS} />
-      <Instances geometry={bush} color={COLORS.bush} placements={BUSH_PLACEMENTS} />
+      <Instances geometry={stone} color={COLORS.stone} placements={stones} />
+      <Instances geometry={bush} color={COLORS.bush} placements={bushes} />
     </>
   );
 }

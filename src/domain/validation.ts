@@ -1,4 +1,4 @@
-import { MAX_SLOTS } from './types';
+import { MAX_SLOTS, QUALITY_LEVELS } from './types';
 import type { AppData, HistoryEntry, Project, Status } from './types';
 import { CURRENT_SCHEMA_VERSION, LIMITS } from './schema';
 import { isSafeLink } from './links';
@@ -16,7 +16,6 @@ const HISTORY_KINDS: readonly HistoryEntry['kind'][] = [
   'action-done',
   'note',
 ];
-const QUALITIES: readonly AppData['prefs']['quality'][] = ['low', 'medium', 'high'];
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -135,7 +134,7 @@ function hasUniqueValues(values: unknown[]): boolean {
 
 function parsePrefs(raw: unknown): Checked<AppData['prefs']> {
   if (!isRecord(raw)) return INVALID;
-  const quality = oneOf(raw.quality, QUALITIES);
+  const quality = oneOf(raw.quality, QUALITY_LEVELS);
   if (quality === INVALID || typeof raw.reducedMotion !== 'boolean') return INVALID;
   return { quality, reducedMotion: raw.reducedMotion };
 }

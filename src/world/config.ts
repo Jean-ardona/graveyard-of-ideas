@@ -56,7 +56,8 @@ export const COLORS = {
   lantern: '#ffe9a8',
 } as const;
 
-export const FOG = { near: 12, far: 60 } as const;
+/** Fog starts here; where it ends comes from the quality preset (fogFar). */
+export const FOG = { near: 12 } as const;
 
 /** Three paths leave the gate: a central one to the hut and two curving sideways. */
 export const PATHS: readonly PathDef[] = [

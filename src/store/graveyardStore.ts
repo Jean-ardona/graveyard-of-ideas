@@ -5,12 +5,13 @@ import {
   exportData,
   honor,
   importData,
+  QUALITY_LEVELS,
   remove,
   restAgain,
   resurrect,
   seedDemoProjects,
 } from '../domain';
-import type { AppData, ImportError, Project } from '../domain';
+import type { AppData, ImportError, Project, QualityLevel } from '../domain';
 import { loadData, saveData } from './persistence';
 import type { LoadResult, StorageError, StorageLike } from './persistence';
 
@@ -39,6 +40,9 @@ export interface GraveyardState {
   prepareImport: (json: string) => PrepareImportResult;
   confirmReplace: () => boolean;
   cancelImport: () => void;
+
+  /** Changes the saved quality level. Unknown values and no-op changes are ignored. */
+  setQuality: (quality: QualityLevel) => void;
 
   dismissWarning: () => void;
   setSaveError: (error: StorageError | null) => void;
@@ -105,6 +109,12 @@ export function createGraveyardStore(storage: StorageLike | null): GraveyardStor
         return true;
       },
       cancelImport: () => set({ pendingImport: null }),
+
+      setQuality: (quality) => {
+        const { data } = get();
+        if (!QUALITY_LEVELS.includes(quality) || data.prefs.quality === quality) return;
+        set({ data: { ...data, prefs: { ...data.prefs, quality } } });
+      },
 
       dismissWarning: () => set({ warning: null }),
       setSaveError: (error) => set({ saveError: error }),

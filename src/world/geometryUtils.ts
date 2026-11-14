@@ -24,9 +24,15 @@ export function mergeParts(parts: THREE.BufferGeometry[]): THREE.BufferGeometry 
   return merged;
 }
 
-/** Creates a GPU resource once and disposes it on unmount. */
-export function useDisposable<T extends { dispose(): void }>(create: () => T): T {
-  const resource = useMemo(create, []);
+/**
+ * Creates a GPU resource and disposes it on unmount. When `deps` change the
+ * resource is rebuilt and the previous one is disposed.
+ */
+export function useDisposable<T extends { dispose(): void }>(
+  create: () => T,
+  deps: readonly unknown[] = [],
+): T {
+  const resource = useMemo(create, deps);
   useEffect(() => () => resource.dispose(), [resource]);
   return resource;
 }

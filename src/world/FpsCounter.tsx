@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import type { QualityLevel } from '../domain';
+import { isTypingTarget } from '../interaction/typingTarget';
+import { qualityLabel } from './quality';
 import type { RenderStats } from './renderStats';
 
 const OVERLAY_STYLE: React.CSSProperties = {
@@ -17,16 +20,21 @@ const OVERLAY_STYLE: React.CSSProperties = {
   zIndex: 100,
 };
 
+interface FpsCounterProps {
+  statsRef: React.MutableRefObject<RenderStats>;
+  quality: QualityLevel;
+  /** Temporary developer key: F2 asks for the next quality level. */
+  onCycleQuality: () => void;
+}
+
 /**
  * Reads FPS from the shared ref written by FpsTracker (inside the Canvas)
  * and renders it as a fixed HTML overlay — no Three.js involved here.
+ * Also shows the quality level; F2 cycles it (temporary developer key).
  */
-export default function FpsCounter({
-  statsRef,
-}: {
-  statsRef: React.MutableRefObject<RenderStats>;
-}) {
-  const [display, setDisplay] = useState<RenderStats>({ fps: 0, calls: 0 });
+export default function FpsCounter({ statsRef, quality, onCycleQuality }: FpsCounterProps) {
+  const [fps, setFps] = useState(0);
+  const [calls, setCalls] = useState(0);
   const rafId = useRef<number>(0);
 
   useEffect(() => {
@@ -34,7 +42,8 @@ export default function FpsCounter({
 
     function tick() {
       if (!running) return;
-      setDisplay(statsRef.current);
+      setFps(statsRef.current.fps);
+      setCalls(statsRef.current.calls);
       rafId.current = requestAnimationFrame(tick);
     }
 
@@ -46,5 +55,19 @@ export default function FpsCounter({
     };
   }, [statsRef]);
 
-  return <div style={OVERLAY_STYLE}>{display.fps} fps, {display.calls} draws</div>;
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'F2' || event.repeat || isTypingTarget(event.target)) return;
+      event.preventDefault();
+      onCycleQuality();
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onCycleQuality]);
+
+  return (
+    <div style={OVERLAY_STYLE}>
+      {fps} fps, {calls} draws, {qualityLabel(quality)} (F2)
+    </div>
+  );
 }

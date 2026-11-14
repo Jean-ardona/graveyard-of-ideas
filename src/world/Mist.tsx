@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { COLORS } from './config';
@@ -36,25 +36,27 @@ function createMistTexture(): THREE.CanvasTexture {
   return new THREE.CanvasTexture(canvas);
 }
 
-/** A few translucent planes drifting slowly just above the ground. */
-export default function Mist() {
+/** Translucent planes drifting slowly just above the ground. */
+export default function Mist({ layers }: { layers: number }) {
   const texture = useDisposable(createMistTexture);
   const meshes = useRef<(THREE.Mesh | null)[]>([]);
+  const active = useMemo(() => LAYERS.slice(0, layers), [layers]);
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
-    LAYERS.forEach((layer, i) => {
+    for (let i = 0; i < active.length; i++) {
+      const layer = active[i]!;
       meshes.current[i]?.position.set(
         layer.x + Math.sin(t * layer.speed + i) * 2,
         layer.y,
         layer.z + Math.cos(t * layer.speed + i) * 2,
       );
-    });
+    }
   });
 
   return (
     <>
-      {LAYERS.map((layer, i) => (
+      {active.map((layer, i) => (
         <mesh
           key={i}
           ref={(mesh) => {
