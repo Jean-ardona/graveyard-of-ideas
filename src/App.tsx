@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber';
 import NightScene from './world/NightScene';
 import FpsTracker from './world/FpsTracker';
 import FpsCounter from './world/FpsCounter';
+import type { RenderStats } from './world/renderStats';
 
 /** Returns true if the browser can create a WebGL context. */
 function isWebGLAvailable(): boolean {
@@ -34,7 +35,7 @@ const FALLBACK_STYLE: React.CSSProperties = {
 };
 
 export default function App() {
-  const fpsRef = useRef<number>(0);
+  const statsRef = useRef<RenderStats>({ fps: 0, calls: 0 });
   const [webglOk] = useState<boolean>(() => isWebGLAvailable());
   const [contextLost, setContextLost] = useState(false);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
@@ -115,10 +116,10 @@ export default function App() {
           style={{ width: '100%', height: '100%' }}
         >
           <NightScene />
-          <FpsTracker fpsRef={fpsRef} />
+          <FpsTracker statsRef={statsRef} />
         </Canvas>
       </div>
-      <FpsCounter fpsRef={fpsRef} />
+      <FpsCounter statsRef={statsRef} />
     </div>
   );
 }

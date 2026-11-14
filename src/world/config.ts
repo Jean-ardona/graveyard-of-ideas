@@ -21,11 +21,11 @@ export const TERRAIN_SIZE = 60;
 export const EYE_HEIGHT = 1.7;
 
 /** The player starts just outside the gate and looks through it. */
-export const PLAYER_START = { x: 0, z: 27 } as const;
+export const PLAYER_START = { x: 0, z: 31 } as const;
 export const PLAYER_LOOK_AT = { x: 0, y: 1.2, z: 0 } as const;
 
 export const GATE_POSITION = { x: 0, z: 24 } as const;
-export const HUT_POSITION = { x: 0, z: -22 } as const;
+export const HUT_POSITION = { x: 0, z: -16 } as const;
 
 /** Direction from the origin toward the moon; the moonlight shares it. */
 export const MOON_DIRECTION = { x: -0.35, y: 0.5, z: -0.8 } as const;
@@ -34,22 +34,30 @@ export const MOON_DISTANCE = 100;
 export const COLORS = {
   sky: '#1a2238',
   fog: '#1a2238',
-  ground: '#2a3548',
-  path: '#3c4456',
+  ground: '#33415a',
+  path: '#5a6a84',
   moon: '#d6e4ff',
+  moonHalo: '#7f9ad0',
   moonlight: '#8fa8d8',
-  ambient: '#34425e',
-  stone: '#4a5568',
+  ambient: '#4a5a7c',
+  hemiGround: '#2a3548',
+  stone: '#7a8498',
+  stoneDark: '#656f84',
   ironDark: '#171d2b',
   wood: '#252d3d',
-  hutWall: '#2f3846',
-  hutRoof: '#1e2634',
+  hutWall: '#6b7487',
+  hutRoof: '#1a2130',
   bush: '#1d2c36',
   mist: '#7f93b8',
   windowGlow: '#a8c8ff',
+  moonPool: '#9db4e0',
+  star: '#dfe8ff',
+  mound: '#1f2838',
+  /** The only warm tone in the scene. */
+  lantern: '#ffe9a8',
 } as const;
 
-export const FOG = { near: 12, far: 45 } as const;
+export const FOG = { near: 12, far: 60 } as const;
 
 /** Three paths leave the gate: a central one to the hut and two curving sideways. */
 export const PATHS: readonly PathDef[] = [
@@ -59,7 +67,7 @@ export const PATHS: readonly PathDef[] = [
       { x: 0, z: 22 },
       { x: 0, z: 10 },
       { x: 0, z: -2 },
-      { x: 0, z: -18.5 },
+      { x: 0, z: -13.5 },
     ],
   },
   {

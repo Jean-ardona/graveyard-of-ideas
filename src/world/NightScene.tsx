@@ -6,6 +6,9 @@ import Hut from './Hut';
 import Mist from './Mist';
 import Moon from './Moon';
 import Paths from './Paths';
+import MoonPool from './MoonPool';
+import SlotMarks from './SlotMarks';
+import Stars from './Stars';
 import StonesAndBushes from './StonesAndBushes';
 import GroundMesh from './GroundMesh';
 
@@ -21,12 +24,16 @@ export default function NightScene() {
     <>
       <color attach="background" args={[COLORS.sky]} />
       <fog attach="fog" args={[COLORS.fog, FOG.near, FOG.far]} />
-      <ambientLight color={COLORS.ambient} intensity={0.6} />
+      <ambientLight color={COLORS.ambient} intensity={0.9} />
+      <hemisphereLight args={[COLORS.moonlight, COLORS.hemiGround, 0.5]} />
       <directionalLight color={COLORS.moonlight} intensity={1} position={MOONLIGHT_POSITION} />
       <CameraRig />
+      <Stars />
       <Moon />
       <GroundMesh />
       <Paths />
+      <MoonPool />
+      <SlotMarks />
       <Gate />
       <Hut />
       <DeadTrees />

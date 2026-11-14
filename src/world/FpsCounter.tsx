@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { RenderStats } from './renderStats';
 
 const OVERLAY_STYLE: React.CSSProperties = {
   position: 'fixed',
@@ -21,11 +22,11 @@ const OVERLAY_STYLE: React.CSSProperties = {
  * and renders it as a fixed HTML overlay — no Three.js involved here.
  */
 export default function FpsCounter({
-  fpsRef,
+  statsRef,
 }: {
-  fpsRef: React.MutableRefObject<number>;
+  statsRef: React.MutableRefObject<RenderStats>;
 }) {
-  const [display, setDisplay] = useState(0);
+  const [display, setDisplay] = useState<RenderStats>({ fps: 0, calls: 0 });
   const rafId = useRef<number>(0);
 
   useEffect(() => {
@@ -33,7 +34,7 @@ export default function FpsCounter({
 
     function tick() {
       if (!running) return;
-      setDisplay(fpsRef.current);
+      setDisplay(statsRef.current);
       rafId.current = requestAnimationFrame(tick);
     }
 
@@ -43,7 +44,7 @@ export default function FpsCounter({
       running = false;
       cancelAnimationFrame(rafId.current);
     };
-  }, [fpsRef]);
+  }, [statsRef]);
 
-  return <div style={OVERLAY_STYLE}>{display} fps</div>;
+  return <div style={OVERLAY_STYLE}>{display.fps} fps, {display.calls} draws</div>;
 }
