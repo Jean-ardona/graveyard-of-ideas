@@ -17,7 +17,7 @@ Build Graveyard of Ideas in layers: pure domain logic first (cheap, GPU-free, pr
   - [x] 2.4 Property-based tests for all invariants (see docs/KIRO_PLAYBOOK.md). _Requirements: 4, 5, 6, 7, 9_
 
 - [ ] 3. Store and persistence
-  - [ ] 3.1 Zustand store, versioned localStorage adapter, autosave, error handling. _Requirements: 7_
+  - [x] 3.1 Zustand store, versioned localStorage adapter, autosave, error handling. _Requirements: 7_
   - [ ] 3.2 Seed three demo projects once only. _Requirements: 7.5_
 
 - [ ] 4. World
