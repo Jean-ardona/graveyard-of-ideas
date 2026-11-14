@@ -1,5 +1,5 @@
 import { COLORS, FOG, MOON_DIRECTION } from './config';
-import CameraRig from './CameraRig';
+import PlayerController from '../interaction/PlayerController';
 import DeadTrees from './DeadTrees';
 import Gate from './Gate';
 import Hut from './Hut';
@@ -19,7 +19,7 @@ const MOONLIGHT_POSITION: [number, number, number] = [
 ];
 
 /** The night cemetery: sky, fog, moonlight, terrain and scenery. */
-export default function NightScene() {
+export default function NightScene({ playerEnabled = true }: { playerEnabled?: boolean }) {
   return (
     <>
       <color attach="background" args={[COLORS.sky]} />
@@ -27,7 +27,7 @@ export default function NightScene() {
       <ambientLight color={COLORS.ambient} intensity={0.9} />
       <hemisphereLight args={[COLORS.moonlight, COLORS.hemiGround, 0.5]} />
       <directionalLight color={COLORS.moonlight} intensity={1} position={MOONLIGHT_POSITION} />
-      <CameraRig />
+      <PlayerController enabled={playerEnabled} />
       <Stars />
       <Moon />
       <GroundMesh />

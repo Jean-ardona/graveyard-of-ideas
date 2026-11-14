@@ -22,7 +22,6 @@ export const EYE_HEIGHT = 1.7;
 
 /** The player starts just outside the gate and looks through it. */
 export const PLAYER_START = { x: 0, z: 31 } as const;
-export const PLAYER_LOOK_AT = { x: 0, y: 1.2, z: 0 } as const;
 
 export const GATE_POSITION = { x: 0, z: 24 } as const;
 export const HUT_POSITION = { x: 0, z: -16 } as const;
@@ -109,3 +108,48 @@ export const GRAVE_SLOTS: readonly GraveSlot[] = [
 ];
 
 export const MIN_SLOT_SPACING = 4;
+
+/** Oriented box on the ground plane, used as a walking obstacle. */
+export interface BoxCollider {
+  x: number;
+  z: number;
+  halfWidth: number;
+  halfDepth: number;
+  /** Rotation around Y in radians, same convention as GraveSlot. */
+  rotation: number;
+}
+
+/** Walking area. It extends past the terrain at the gate so the start point is inside. */
+export const PLAYER_BOUNDS = { minX: -28, maxX: 28, minZ: -28, maxZ: 32 } as const;
+export const PLAYER_RADIUS = 0.35;
+
+const GATE_PILLAR_X = 4.5;
+const GATE_WALL_X = 8.5;
+
+const GATE_COLLIDERS: readonly BoxCollider[] = [-1, 1].flatMap((side) => [
+  { x: side * GATE_PILLAR_X, z: GATE_POSITION.z, halfWidth: 0.95, halfDepth: 0.95, rotation: 0 },
+  { x: side * GATE_WALL_X, z: GATE_POSITION.z, halfWidth: 3.25, halfDepth: 0.3, rotation: 0 },
+]);
+
+const HUT_COLLIDER: BoxCollider = {
+  x: HUT_POSITION.x,
+  z: HUT_POSITION.z,
+  halfWidth: 2.5,
+  halfDepth: 2,
+  rotation: 0,
+};
+
+/** Footprint a tomb will occupy on its slot. */
+const SLOT_COLLIDERS: readonly BoxCollider[] = GRAVE_SLOTS.map((slot) => ({
+  x: slot.x,
+  z: slot.z,
+  halfWidth: 0.8,
+  halfDepth: 1.3,
+  rotation: slot.rotation,
+}));
+
+export const COLLIDERS: readonly BoxCollider[] = [
+  ...GATE_COLLIDERS,
+  HUT_COLLIDER,
+  ...SLOT_COLLIDERS,
+];
