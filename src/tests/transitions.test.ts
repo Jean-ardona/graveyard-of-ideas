@@ -159,6 +159,10 @@ function apply(projects: Project[], op: Op, counter: number): Project[] {
 describe('properties', () => {
   const opsArb = fc.array(opArb, { maxLength: 60 });
 
+  /**
+   * **Feature: graveyard-core, Property 1: Resurrect never duplicates: project count unchanged and ids stay unique**
+   * **Validates: Requirements 5**
+   */
   it('P1: resurrect never duplicates', () => {
     fc.assert(
       fc.property(fc.integer({ min: 1, max: MAX_SLOTS }), fc.nat(30), (count, index) => {
@@ -173,6 +177,10 @@ describe('properties', () => {
     );
   });
 
+  /**
+   * **Feature: graveyard-core, Property 2: Slot uniqueness: no two resting projects share a slot**
+   * **Validates: Requirements 4**
+   */
   it('P2: no two resting projects share a slot after any sequence', () => {
     fc.assert(
       fc.property(opsArb, (ops) => {
@@ -186,6 +194,10 @@ describe('properties', () => {
     );
   });
 
+  /**
+   * **Feature: graveyard-core, Property 3: Slot ownership: only resting projects have a slot**
+   * **Validates: Requirements 4**
+   */
   it('P3: only resting projects have a slot', () => {
     fc.assert(
       fc.property(opsArb, (ops) => {
@@ -204,6 +216,10 @@ describe('properties', () => {
     );
   });
 
+  /**
+   * **Feature: graveyard-core, Property 7: Resurrect requires a next action; failure leaves data unchanged**
+   * **Validates: Requirements 5**
+   */
   it('P7: resurrect without a next action fails and leaves data unchanged', () => {
     const blank = fc.array(fc.constantFrom(' ', '\t', '\n'), { maxLength: 5 }).map((a) => a.join(''));
     fc.assert(
@@ -217,6 +233,10 @@ describe('properties', () => {
     );
   });
 
+  /**
+   * **Feature: graveyard-core, Property 8: History is append-only**
+   * **Validates: Requirements 6, 7**
+   */
   it('P8: history never shrinks for a surviving project', () => {
     fc.assert(
       fc.property(opsArb, (ops) => {

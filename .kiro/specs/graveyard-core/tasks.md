@@ -10,11 +10,11 @@ Build Graveyard of Ideas in layers: pure domain logic first (cheap, GPU-free, pr
   - [x] 1.2 Folder structure per steering/structure.md; MIT license; never ignore .kiro.
   - [x] 1.3 Render a minimal night scene (ground plane, fog, moon light, three boxes) and display the frame rate, so performance can be measured on the target machine.
 
-- [ ] 2. Domain core (no UI)
+- [x] 2. Domain core (no UI)
   - [x] 2.1 Types, createProject, allocateSlot, bury. _Requirements: 3, 4_
   - [x] 2.2 resurrect, restAgain, honor, remove with validation. _Requirements: 5, 6_
   - [x] 2.3 exportData / importData with schema validation and migration. _Requirements: 7_
-  - [ ] 2.4 Property-based tests for all invariants (see docs/KIRO_PLAYBOOK.md). _Requirements: 4, 5, 6, 7, 9_
+  - [x] 2.4 Property-based tests for all invariants (see docs/KIRO_PLAYBOOK.md). _Requirements: 4, 5, 6, 7, 9_
 
 - [ ] 3. Store and persistence
   - [ ] 3.1 Zustand store, versioned localStorage adapter, autosave, error handling. _Requirements: 7_

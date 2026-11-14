@@ -1,6 +1,7 @@
 import { MAX_SLOTS } from './types';
 import type { AppData, HistoryEntry, Project, Status } from './types';
 import { CURRENT_SCHEMA_VERSION, LIMITS } from './schema';
+import { isSafeLink } from './links';
 
 const INVALID = Symbol('invalid');
 type Checked<T> = T | typeof INVALID;
@@ -32,6 +33,17 @@ function nonBlankText(value: unknown, max: number): Checked<string> {
 
 function optionalText(value: unknown, max: number): Checked<string | undefined> {
   return value === undefined ? undefined : text(value, max);
+}
+
+/** Accepts only safe http(s) links (see isSafeLink). */
+function webLink(value: unknown): Checked<string> {
+  return isSafeLink(value) ? value : INVALID;
+}
+
+/** Like webLink, but an absent or empty value means "no link". */
+function optionalWebLink(value: unknown): Checked<string | undefined> {
+  if (value === undefined) return undefined;
+  return value === '' ? '' : webLink(value);
 }
 
 function timestamp(value: unknown): Checked<string> {
@@ -95,13 +107,13 @@ function parseProject(raw: unknown): Checked<Project> {
     abandonReason: optionalText(raw.abandonReason, LIMITS.field),
     epitaph: optionalText(raw.epitaph, LIMITS.field),
     notes: text(raw.notes, LIMITS.notes),
-    links: list(raw.links, LIMITS.links, (link) => text(link, LIMITS.link)),
+    links: list(raw.links, LIMITS.links, webLink),
     status: oneOf(raw.status, STATUSES),
     slot: optionalSlot(raw.slot),
     reducedVersion: optionalText(raw.reducedVersion, LIMITS.field),
     nextAction: optionalText(raw.nextAction, LIMITS.field),
     result: optionalText(raw.result, LIMITS.field),
-    resultLink: optionalText(raw.resultLink, LIMITS.link),
+    resultLink: optionalWebLink(raw.resultLink),
     history: list(raw.history, LIMITS.history, parseHistoryEntry),
     createdAt: timestamp(raw.createdAt),
     updatedAt: timestamp(raw.updatedAt),

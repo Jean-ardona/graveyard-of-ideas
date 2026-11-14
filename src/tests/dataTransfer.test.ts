@@ -2,6 +2,10 @@ import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
 import {
   buryNewProject,
+  resurrect,
+  restAgain,
+  honor,
+  remove,
   exportData,
   importData,
   CURRENT_SCHEMA_VERSION,
@@ -118,6 +122,44 @@ describe('importData', () => {
     expect(r.ok).toBe(false);
   });
 
+  it('accepts http and https links', () => {
+    const json = corrupted((p) => {
+      p.projects[0].links = ['http://example.com', 'https://example.com/a?b=1#c', 'HTTPS://EXAMPLE.COM'];
+      p.projects[0].resultLink = 'https://example.com/done';
+    });
+    expect(importData(json).ok).toBe(true);
+  });
+
+  it('rejects non-http(s) links with invalid_schema, including case and whitespace variants', () => {
+    const unsafe = [
+      'javascript:alert(1)',
+      'JavaScript:alert(1)',
+      '  javascript:alert(1)',
+      '\tJAVASCRIPT:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      'DaTa:text/html;base64,AAAA',
+      ' \n data:text/plain,hi',
+      'vbscript:msgbox(1)',
+      'VBScript:msgbox(1)',
+      '  vbscript:msgbox(1)',
+      'ftp://example.com',
+      'not a url',
+      '',
+    ];
+    for (const link of unsafe) {
+      expect(importData(corrupted((p) => (p.projects[0].links = [link])))).toEqual({
+        ok: false,
+        error: 'invalid_schema',
+      });
+      if (link !== '') {
+        expect(importData(corrupted((p) => (p.projects[0].resultLink = link)))).toEqual({
+          ok: false,
+          error: 'invalid_schema',
+        });
+      }
+    }
+  });
+
   it('rejects out-of-order history', () => {
     const r = importData(corrupted((p) => (p.projects[0].history[0].at = '2030-01-01T00:00:00.000Z')));
     expect(r).toEqual({ ok: false, error: 'invalid_schema' });
@@ -179,12 +221,12 @@ const projectBaseArb = fc.record(
     abandonReason: shortText,
     epitaph: shortText,
     notes: shortText,
-    links: fc.array(shortText, { maxLength: 4 }),
+    links: fc.array(fc.webUrl(), { maxLength: 4 }),
     status: fc.constantFrom('resting', 'resurrected', 'accomplished'),
     reducedVersion: shortText,
     nextAction: shortText,
     result: shortText,
-    resultLink: shortText,
+    resultLink: fc.webUrl(),
     history: historyArb,
     createdAt: isoArb,
     updatedAt: isoArb,
@@ -219,6 +261,10 @@ const appDataArb: fc.Arbitrary<AppData> = fc
   });
 
 describe('properties', () => {
+  /**
+   * **Feature: graveyard-core, Property 4: Export/import round trip: import(export(data)) equals data**
+   * **Validates: Requirements 9**
+   */
   it('P4: import(export(data)) equals data', () => {
     fc.assert(
       fc.property(appDataArb, (data) => {
@@ -229,6 +275,83 @@ describe('properties', () => {
     );
   });
 
+  /**
+   * **Feature: graveyard-core, Property 4: Export/import round trip: import(export(data)) equals data**
+   * **Validates: Requirements 9**
+   *
+   * Data is built only through the domain functions, fed with arbitrary (often unsafe) text and links,
+   * so anything the domain accepts must also survive export then import.
+   */
+  it('P4: data produced by domain functions always survives export then import', () => {
+    const linkArb = fc.oneof(
+      fc.webUrl(),
+      fc.webUrl().map((url) => `  ${url}\n`),
+      fc.constantFrom('javascript:alert(1)', ' DATA:text/html,x', 'VBScript:x', 'ftp://a.b', ''),
+      fc.string({ maxLength: 20 }),
+    );
+    const pick = fc.nat({ max: 30 });
+    const opArb = fc.oneof(
+      fc.record({
+        type: fc.constant('bury' as const),
+        title: shortText,
+        description: shortText,
+        goal: fc.option(shortText, { nil: undefined }),
+        notes: fc.option(shortText, { nil: undefined }),
+        links: fc.option(fc.array(linkArb, { maxLength: 3 }), { nil: undefined }),
+      }),
+      fc.record({ type: fc.constant('resurrect' as const), at: pick, nextAction: shortText, reducedVersion: shortText }),
+      fc.record({ type: fc.constant('restAgain' as const), at: pick }),
+      fc.record({
+        type: fc.constant('honor' as const),
+        at: pick,
+        result: fc.option(shortText, { nil: undefined }),
+        resultLink: fc.option(linkArb, { nil: undefined }),
+      }),
+      fc.record({ type: fc.constant('remove' as const), at: pick }),
+    );
+
+    fc.assert(
+      fc.property(fc.array(opArb, { maxLength: 40 }), (ops) => {
+        let projects: Project[] = [];
+        let tick = 0;
+        const now = () => new Date(Date.UTC(2026, 10, 14, 0, 0, tick++)).toISOString();
+        const target = (at: number) => projects[at % Math.max(projects.length, 1)]?.id ?? 'missing';
+
+        for (const op of ops) {
+          if (op.type === 'bury') {
+            const { type: _type, ...input } = op;
+            const r = buryNewProject(input, projects, { now: now(), id: `id-${tick}` });
+            if (r.ok) projects = r.projects;
+          } else if (op.type === 'resurrect') {
+            const r = resurrect(target(op.at), op, projects, { now: now() });
+            if (r.ok) projects = r.projects;
+          } else if (op.type === 'restAgain') {
+            const r = restAgain(target(op.at), projects, { now: now() });
+            if (r.ok) projects = r.projects;
+          } else if (op.type === 'honor') {
+            const r = honor(target(op.at), op, projects, { now: now() });
+            if (r.ok) projects = r.projects;
+          } else {
+            const r = remove(target(op.at), projects);
+            if (r.ok) projects = r.projects;
+          }
+        }
+
+        const data: AppData = {
+          schemaVersion: CURRENT_SCHEMA_VERSION,
+          projects,
+          seeded: true,
+          prefs: { quality: 'low', reducedMotion: false },
+        };
+        expect(importData(exportData(data))).toEqual({ ok: true, data });
+      }),
+    );
+  });
+
+  /**
+   * **Feature: graveyard-core, Property 5: Import validation: malformed or hostile JSON is rejected and never replaces existing data**
+   * **Validates: Requirements 9**
+   */
   it('P5: arbitrary or hostile input never throws and never yields data', () => {
     const jsonText = fc.jsonValue().map((value) => JSON.stringify(value));
     const hostileText = fc.constantFrom('__proto__', 'constructor', 'prototype').chain((key) =>
@@ -247,6 +370,10 @@ describe('properties', () => {
     );
   });
 
+  /**
+   * **Feature: graveyard-core, Property 5: Import validation: malformed or hostile JSON is rejected and never replaces existing data**
+   * **Validates: Requirements 9**
+   */
   it('P5: corrupting an otherwise valid export is always rejected', () => {
     const corruptions: Array<(p: any) => void> = [
       (p) => (p.schemaVersion = CURRENT_SCHEMA_VERSION + 1),

@@ -1,5 +1,8 @@
 import { Project } from './types';
 import { allocateSlot } from './slots';
+import { isSafeLink, invalidLink } from './links';
+import type { InvalidLinkFailure } from './links';
+import { LIMITS } from './schema';
 
 // ---------------------------------------------------------------------------
 // Input types
@@ -27,7 +30,8 @@ export interface ProjectCreateOptions {
 
 export type BuryNewProjectResult =
   | { ok: true; project: Project; projects: Project[] }
-  | { ok: false; error: 'invalid_title' | 'invalid_description' | 'graveyard_full' };
+  | { ok: false; error: 'invalid_title' | 'invalid_description' | 'graveyard_full' }
+  | InvalidLinkFailure;
 
 // ---------------------------------------------------------------------------
 // Internal factory — not exported from index.ts
@@ -52,7 +56,7 @@ function createBuriedProject(
     abandonReason: input.abandonReason,
     epitaph: input.epitaph,
     notes: input.notes ?? '',
-    links: input.links ?? [],
+    links: (input.links ?? []).map((link) => link.trim()),
     status: 'resting',
     slot,
     history: [
@@ -76,6 +80,7 @@ function createBuriedProject(
  * Returns:
  *   { ok: true,  project, projects } — new project appended to a new array
  *   { ok: false, error }             — 'invalid_title' | 'invalid_description' | 'graveyard_full'
+ *   { ok: false, error: 'invalid_link', message } — any link is not a safe http(s) URL; the whole input is rejected
  */
 export function buryNewProject(
   input: ProjectInput,
@@ -87,6 +92,11 @@ export function buryNewProject(
   }
   if (!input.description || input.description.trim() === '') {
     return { ok: false, error: 'invalid_description' };
+  }
+
+  const links = input.links ?? [];
+  if (links.length > LIMITS.links || !links.every(isSafeLink)) {
+    return invalidLink;
   }
 
   const slot = allocateSlot(projects);

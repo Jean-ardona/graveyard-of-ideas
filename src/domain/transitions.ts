@@ -1,5 +1,7 @@
 import { Project } from './types';
 import { rebury } from './projects';
+import { isSafeLink, invalidLink } from './links';
+import type { InvalidLinkFailure } from './links';
 import type { ProjectCreateOptions } from './projects';
 
 // ---------------------------------------------------------------------------
@@ -24,7 +26,7 @@ export type TransitionResult<E extends string> =
 
 export type ResurrectResult = TransitionResult<'invalid_next_action'>;
 export type RestAgainResult = TransitionResult<'graveyard_full'>;
-export type HonorResult = TransitionResult<never>;
+export type HonorResult = TransitionResult<never> | InvalidLinkFailure;
 
 export type RemoveResult =
   | { ok: true; projects: Project[] }
@@ -115,12 +117,15 @@ export function honor(
   if (!project) return { ok: false, error: 'not_found' };
   if (project.status !== 'resurrected') return { ok: false, error: 'invalid_transition' };
 
+  const resultLink = input.resultLink?.trim() || undefined;
+  if (resultLink !== undefined && !isSafeLink(resultLink)) return invalidLink;
+
   const now = opts.now ?? new Date().toISOString();
   const updated: Project = {
     ...withoutSlot(project),
     status: 'accomplished',
     result: input.result?.trim() || undefined,
-    resultLink: input.resultLink?.trim() || undefined,
+    resultLink,
     updatedAt: now,
     history: [...project.history, { at: now, kind: 'honored', text: input.result?.trim() || undefined }],
   };
