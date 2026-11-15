@@ -28,10 +28,17 @@ interface NightSceneProps {
   /** Changing it rebuilds every preset-sized part of the scene and disposes the old one. */
   quality: QualityLevel;
   playerEnabled?: boolean;
+  /** True while a book sequence runs: the view and walking freeze, nothing is focused. */
+  inputLocked?: boolean;
 }
 
 /** The night cemetery: sky, fog, moonlight, terrain and scenery. */
-export default function NightScene({ preset, quality, playerEnabled = true }: NightSceneProps) {
+export default function NightScene({
+  preset,
+  quality,
+  playerEnabled = true,
+  inputLocked = false,
+}: NightSceneProps) {
   return (
     <>
       <color attach="background" args={[COLORS.sky]} />
@@ -39,8 +46,8 @@ export default function NightScene({ preset, quality, playerEnabled = true }: Ni
       <ambientLight color={COLORS.ambient} intensity={0.9} />
       <hemisphereLight args={[COLORS.moonlight, COLORS.hemiGround, 0.5]} />
       <directionalLight color={COLORS.moonlight} intensity={1} position={MOONLIGHT_POSITION} />
-      <PlayerController enabled={playerEnabled} />
-      <InteractionController enabled={playerEnabled} />
+      <PlayerController enabled={playerEnabled} inputLocked={inputLocked} />
+      <InteractionController enabled={playerEnabled && !inputLocked} />
       <Fragment key={quality}>
         <Stars count={preset.starCount} />
         <DeadTrees count={preset.treeCount} />

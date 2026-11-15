@@ -6,7 +6,8 @@ import { terrainHeight } from '../world/terrain';
 import type { Point } from './collision';
 import { clampDelta, keysToAxes, stepPlayer } from './playerMovement';
 import { playerSession } from './playerSession';
-import { allowsMovement, getPointerMode } from './pointerLock';
+import { canWalk } from './inputLock';
+import { getPointerMode } from './pointerLock';
 import { usePlayerInput } from './usePlayerInput';
 
 /**
@@ -14,10 +15,17 @@ import { usePlayerInput } from './usePlayerInput';
  * Set `enabled` to false to suspend movement and look (menus, cinematics).
  * Walking also stops while the pointer lock is lost; see pointerLock.ts.
  */
-export default function PlayerController({ enabled = true }: { enabled?: boolean }) {
+export default function PlayerController({
+  enabled = true,
+  inputLocked = false,
+}: {
+  enabled?: boolean;
+  /** Freezes walking and look without touching the pointer mode (a book sequence is running). */
+  inputLocked?: boolean;
+}) {
   const camera = useThree((state) => state.camera);
   const canvas = useThree((state) => state.gl.domElement);
-  const input = usePlayerInput(enabled, canvas);
+  const input = usePlayerInput(enabled, canvas, inputLocked);
   const position = useRef<Point>({ x: playerSession.x, z: playerSession.z });
 
   useLayoutEffect(() => {
@@ -26,7 +34,7 @@ export default function PlayerController({ enabled = true }: { enabled?: boolean
 
   useFrame((_, rawDelta) => {
     const state = input.current;
-    if (enabled && allowsMovement(getPointerMode())) {
+    if (canWalk(enabled, inputLocked, getPointerMode())) {
       position.current = stepPlayer(
         position.current,
         keysToAxes(state.keys),

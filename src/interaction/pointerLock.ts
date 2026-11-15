@@ -24,9 +24,11 @@ export function modeAfterLockChange(mode: PointerMode, locked: boolean): Pointer
  * Mode after a lock request fails. A failure before the first successful lock means
  * the feature is unusable here, so look falls back to click and drag. After a success
  * a failure is transient (browsers refuse a new request right after Escape), so the
- * mode is kept and the user can click again.
+ * mode is kept and the user can click again. A refusal while `released` (a book was
+ * closed with Escape) becomes `lost`, so the resume prompt shows and a click locks again.
  */
 export function modeAfterLockFailure(mode: PointerMode, hasLockedBefore: boolean): PointerMode {
+  if (mode === 'released') return 'lost';
   return hasLockedBefore ? mode : 'fallback';
 }
 

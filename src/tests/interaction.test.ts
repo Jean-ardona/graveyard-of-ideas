@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { closeBook, getReadingProjectId, openBook } from '../book/readingBook';
+import { readingMachine } from '../book/readingMachine';
+import { canWalk, isLooking } from '../interaction/inputLock';
+import { appStore } from '../store/appStore';
 import {
   COS_VIEW_HALF_ANGLE,
   allowsInteraction,
@@ -80,5 +84,84 @@ describe('allowsInteraction', () => {
     for (const mode of ['idle', 'lost', 'released'] as const) {
       expect(allowsInteraction(mode)).toBe(false);
     }
+  });
+});
+
+describe('opening and closing a book through readingBook', () => {
+  const id = (() => {
+    const result = appStore.getState().buryNewProject({ title: 'Lantern', description: 'A lantern that learns' });
+    if (!result.ok) throw new Error(result.error);
+    return result.project.id;
+  })();
+
+  function setReducedMotion(reducedMotion: boolean): void {
+    const { data } = appStore.getState();
+    appStore.setState({ data: { ...data, prefs: { ...data.prefs, reducedMotion } } });
+  }
+
+  function tickUntil(done: () => boolean): void {
+    for (let i = 0; i < 100 && !done(); i++) readingMachine.tick(0.05);
+  }
+
+  afterEach(() => {
+    setReducedMotion(false);
+    closeBook();
+    readingMachine.skip();
+  });
+
+  it('toggles inputLocked exactly with the machine, and keeps only the project id', () => {
+    expect(readingMachine.inputLocked()).toBe(false);
+    openBook(id);
+    expect(readingMachine.phase()).toBe('lifting');
+    expect(readingMachine.inputLocked()).toBe(true);
+    expect(getReadingProjectId()).toBe(id);
+
+    tickUntil(() => readingMachine.phase() === 'open');
+    expect(readingMachine.inputLocked()).toBe(true);
+    expect(readingMachine.pointerLockReleased()).toBe(true);
+
+    closeBook();
+    expect(readingMachine.phase()).toBe('closing');
+    expect(readingMachine.inputLocked()).toBe(true);
+    tickUntil(() => readingMachine.phase() === 'closed');
+    expect(readingMachine.inputLocked()).toBe(false);
+    expect(getReadingProjectId()).toBeNull();
+  });
+
+  it('ignores a second open while a sequence runs, and unknown projects', () => {
+    openBook('missing');
+    expect(readingMachine.phase()).toBe('closed');
+    expect(getReadingProjectId()).toBeNull();
+    openBook(id);
+    readingMachine.tick(0.3);
+    const t = readingMachine.sequence.t;
+    openBook(id);
+    expect(readingMachine.sequence.t).toBe(t);
+  });
+
+  it('reaches open and closed at once with reduced motion', () => {
+    setReducedMotion(true);
+    openBook(id);
+    expect(readingMachine.phase()).toBe('open');
+    closeBook();
+    expect(readingMachine.phase()).toBe('closed');
+    expect(getReadingProjectId()).toBeNull();
+  });
+});
+
+describe('input lock', () => {
+  it('stops walking while locked or disabled, whatever the pointer mode', () => {
+    expect(canWalk(true, false, 'locked')).toBe(true);
+    expect(canWalk(true, true, 'locked')).toBe(false);
+    expect(canWalk(false, false, 'locked')).toBe(false);
+    expect(canWalk(true, false, 'released')).toBe(false);
+  });
+
+  it('turns the view only when unlocked, with look-drag off in the fallback', () => {
+    expect(isLooking('locked', false, false)).toBe(true);
+    expect(isLooking('fallback', true, false)).toBe(true);
+    expect(isLooking('fallback', false, false)).toBe(false);
+    expect(isLooking('locked', false, true)).toBe(false);
+    expect(isLooking('fallback', true, true)).toBe(false);
   });
 });

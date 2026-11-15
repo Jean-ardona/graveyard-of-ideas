@@ -1,5 +1,6 @@
-import { useEffect, useRef, type MutableRefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, type MutableRefObject } from 'react';
 import { browserStorage, DEFAULT_LOOK_SENSITIVITY, loadLookSensitivity } from '../store';
+import { isLooking } from './inputLock';
 import { applyLook, type LookState } from './playerLook';
 import { MOVEMENT_KEYS } from './playerMovement';
 import { playerSession } from './playerSession';
@@ -20,6 +21,8 @@ export interface PlayerInput {
   look: LookState;
   /** Radians per pixel. */
   sensitivity: number;
+  /** While true, walking keys and look are ignored; the pointer mode is not touched. */
+  locked: boolean;
 }
 
 /**
@@ -29,13 +32,24 @@ export interface PlayerInput {
 export function usePlayerInput(
   enabled: boolean,
   canvas: HTMLElement,
+  inputLocked = false,
 ): MutableRefObject<PlayerInput> {
   const input = useRef<PlayerInput>({
     keys: new Set(),
     fast: false,
     look: { yaw: playerSession.yaw, pitch: playerSession.pitch },
     sensitivity: DEFAULT_LOOK_SENSITIVITY,
+    locked: inputLocked,
   });
+
+  useLayoutEffect(() => {
+    const state = input.current;
+    state.locked = inputLocked;
+    if (inputLocked) {
+      state.keys.clear();
+      state.fast = false;
+    }
+  }, [inputLocked]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -59,7 +73,7 @@ export function usePlayerInput(
       if (key === 'enter') {
         const onPage = event.target === document.body || event.target === canvas;
         if (onPage && !event.repeat && canRequestLock()) requestPointer();
-      } else if (MOVEMENT_KEYS.has(key) && allowsMovement(getPointerMode())) {
+      } else if (MOVEMENT_KEYS.has(key) && !state.locked && allowsMovement(getPointerMode())) {
         state.keys.add(key);
         event.preventDefault();
       }
@@ -75,9 +89,7 @@ export function usePlayerInput(
     }
 
     function onMouseMove(event: MouseEvent) {
-      const mode = getPointerMode();
-      const looking = mode === 'locked' || (mode === 'fallback' && (event.buttons & 1) === 1);
-      if (!looking) return;
+      if (!isLooking(getPointerMode(), (event.buttons & 1) === 1, state.locked)) return;
       state.look = applyLook(state.look, event.movementX, event.movementY, state.sensitivity);
     }
 

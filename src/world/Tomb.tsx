@@ -61,7 +61,7 @@ function Tomb({ descriptor, assets, bookAssets }: TombProps) {
       action,
       enabled: true,
     });
-    // Opens the book's pages directly until the tomb opening sequence exists.
+    // E starts the book sequence: the book lifts, comes to the player and opens.
     const removeHandler = registerActionHandler(action, () => openBook(id));
     const removeCollider = registerCollider(tombCollider(descriptor));
     const removeHandle = registerTombHandle({

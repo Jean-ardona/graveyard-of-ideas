@@ -18,16 +18,20 @@ const PROMPT_STYLE: React.CSSProperties = {
   zIndex: 92,
 };
 
-/** Discreet "E — label" prompt below the crosshair. Fades out while nothing is in reach. */
-export default function InteractionPrompt() {
+/**
+ * Discreet "E — label" prompt below the crosshair. Fades out while nothing is in reach
+ * and stays hidden while `inputLocked` (a book sequence is running).
+ */
+export default function InteractionPrompt({ inputLocked = false }: { inputLocked?: boolean }) {
   const focused = useFocused();
   const lastLabel = useRef('');
   if (focused) lastLabel.current = focused.label;
+  const shown = focused !== null && !inputLocked;
   return (
     <div
-      style={{ ...PROMPT_STYLE, opacity: focused ? 1 : 0 }}
+      style={{ ...PROMPT_STYLE, opacity: shown ? 1 : 0 }}
       role="status"
-      aria-hidden={focused ? undefined : true}
+      aria-hidden={shown ? undefined : true}
     >
       E — {lastLabel.current}
     </div>

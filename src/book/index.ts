@@ -1,5 +1,8 @@
 export { default as Book } from './Book';
 export { default as BookReader } from './BookReader';
+export { default as BookSequenceDriver } from './BookSequenceDriver';
+export { useReadingInput } from './useReadingInput';
+export { useReadingPhase } from './useReadingPhase';
 export { createBookAssets, BOOK_SIZE } from './bookAssets';
 export type { BookAssets } from './bookAssets';
 export { getBookHandle } from './bookHandles';

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { resolveCollisions } from '../interaction/collision';
 import { MAX_LOOK_DELTA, MAX_PITCH, applyLook } from '../interaction/playerLook';
 import {
@@ -10,6 +10,10 @@ import {
 } from '../interaction/playerMovement';
 import {
   allowsMovement,
+  attachPointerTarget,
+  getPointerMode,
+  releasePointer,
+  requestPointer,
   modeAfterLockChange,
   modeAfterLockFailure,
   modeOnResume,
@@ -308,5 +312,43 @@ describe('pointer modes', () => {
     expect(modeOnSuspend('fallback')).toBe('fallback');
     expect(modeOnResume('released')).toBe('lost');
     expect(modeOnResume('idle')).toBe('idle');
+  });
+});
+
+describe('refused pointer request after a deliberate release', () => {
+  function canvasRefusing(request: () => unknown): HTMLElement {
+    const canvas = document.createElement('canvas');
+    canvas.requestPointerLock = request as () => Promise<void>;
+    return canvas;
+  }
+
+  it('turns released into lost, in every refusal case', () => {
+    expect(modeAfterLockFailure('released', true)).toBe('lost');
+    expect(modeAfterLockFailure('released', false)).toBe('lost');
+  });
+
+  it('shows the resume prompt mode when the browser rejects the request', async () => {
+    const request = vi.fn(() => Promise.reject(new Error('refused')));
+    const detach = attachPointerTarget(canvasRefusing(request));
+    releasePointer();
+    expect(getPointerMode()).toBe('released');
+    requestPointer();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(getPointerMode()).toBe('lost');
+    detach();
+  });
+
+  it('does the same when the request throws', () => {
+    const detach = attachPointerTarget(
+      canvasRefusing(() => {
+        throw new Error('refused');
+      }),
+    );
+    releasePointer();
+    requestPointer();
+    expect(getPointerMode()).toBe('lost');
+    detach();
   });
 });

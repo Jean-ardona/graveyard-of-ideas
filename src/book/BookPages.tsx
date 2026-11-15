@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { maxLengthOf } from '../domain';
 import type { Project } from '../domain';
 import { appStore } from '../store/appStore';
@@ -96,14 +96,6 @@ function FieldEditor({ projectId, spec, saved }: FieldEditorProps) {
 export default function BookPages({ project }: { project: Project }) {
   const [partIndex, setPartIndex] = useState(0);
   const part = BOOK_PARTS[partIndex] ?? BOOK_PARTS[0]!;
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape') closeBook();
-    }
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
 
   return (
     <section role="dialog" aria-label={project.title} style={PANEL_STYLE}>
