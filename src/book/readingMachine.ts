@@ -5,10 +5,12 @@ import {
   clampDelta,
   createSequenceProgress,
   createSequenceState,
+  startClosingFromCover,
   tickSequence,
   writeProgress,
 } from './bookSequence';
 import type { BookPhase, SequenceProgress, SequenceState } from './bookSequence';
+import { coverOpenFraction } from './coverScrub';
 import {
   beginDrag,
   cancelDrag,
@@ -18,10 +20,11 @@ import {
   isIdle,
   resetPageTurn,
   settleNow,
+  takeCloseRequest,
   tickPageTurn,
   turnByKey,
 } from './pageTurn';
-import type { PageTurnState, TurnDirection } from './pageTurn';
+import type { DragSide, PageTurnState, TurnDirection } from './pageTurn';
 
 export interface ReadingMachine {
   /** Mutable records, created once. Read them each frame; never replace them. */
@@ -34,8 +37,9 @@ export interface ReadingMachine {
   skip(): void;
   tick(dt: number): void;
   /** Page events work only while the book is open. */
-  beginDrag(): void;
+  beginDrag(side?: DragSide): void;
   dragTo(dxPx: number, pageWidthPx: number): void;
+  /** Releases the drag. A closing gesture past the threshold closes the book. */
   endDrag(): void;
   cancelDrag(): void;
   turnPage(direction: TurnDirection): void;
@@ -61,15 +65,23 @@ export function createReadingMachine(): ReadingMachine {
   let seenPhase = sequence.phase;
   let seenStatus = pages.status;
   let seenIndex = pages.index;
+  let seenTurning = pages.direction !== null;
+  let seenCloseDrag = pages.closeDrag;
 
   /** Runs after every mutation: keeps the invariants, derives progress and reports discrete changes. */
   function settled(): void {
     if (sequence.phase === 'closed') resetPageTurn(pages);
     writeProgress(sequence.t, progress);
-    if (sequence.phase === seenPhase && pages.status === seenStatus && pages.index === seenIndex) return;
+    const turning = pages.direction !== null;
+    const unchanged =
+      sequence.phase === seenPhase && pages.status === seenStatus && pages.index === seenIndex && turning === seenTurning &&
+      pages.closeDrag === seenCloseDrag;
+    if (unchanged) return;
+    seenCloseDrag = pages.closeDrag;
     seenPhase = sequence.phase;
     seenStatus = pages.status;
     seenIndex = pages.index;
+    seenTurning = turning;
     version += 1;
     listeners.forEach((listener) => listener());
   }
@@ -104,9 +116,16 @@ export function createReadingMachine(): ReadingMachine {
       tickSequence(sequence, step, isIdle(pages));
       settled();
     },
-    beginDrag: () => whileOpen(() => beginDrag(pages)),
+    beginDrag: (side = 'right') => whileOpen(() => beginDrag(pages, side)),
     dragTo: (dxPx, pageWidthPx) => whileOpen(() => dragTo(pages, dxPx, pageWidthPx)),
-    endDrag: () => whileOpen(() => endDrag(pages)),
+    endDrag: () =>
+      whileOpen(() => {
+        const scrubbed = coverOpenFraction(pages);
+        endDrag(pages);
+        // A closing gesture past the threshold leaves the pages idle: the close starts at once, from
+        // the scrubbed cover angle. Below it the cover settles back to open.
+        if (takeCloseRequest(pages)) startClosingFromCover(sequence, scrubbed);
+      }),
     cancelDrag: () => whileOpen(() => cancelDrag(pages)),
     turnPage: (direction) => whileOpen(() => turnByKey(pages, direction)),
     finishTurn: () =>

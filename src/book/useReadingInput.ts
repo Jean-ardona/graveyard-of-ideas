@@ -4,6 +4,7 @@ import { isTypingTarget } from '../interaction/typingTarget';
 import { cancelPageDrag, closeBook, endPageDrag, turnPage } from './readingBook';
 import { routeReadingKey } from './readingKeys';
 import { readingMachine } from './readingMachine';
+import type { DragSide } from './pageTurn';
 
 /**
  * Routes Escape, E and the arrow keys to the reading machine (see `routeReadingKey`).
@@ -42,11 +43,13 @@ export interface PageDragHandlers {
 }
 
 /**
- * Pointer handlers that turn pages by dragging. Attach them to the page surface.
+ * Pointer handlers that turn pages by dragging. Attach them to the page surface of `side`: the right
+ * page turns forward when dragged left, the left page turns back when dragged right, and at the first
+ * and last page the same drag closes the book.
  * `pageWidthPx` is read when a drag moves, so it follows window resizes.
  * The pointer is captured for the drag; pointer cancel and window blur abandon it.
  */
-export function usePageDrag(pageWidthPx: () => number): PageDragHandlers {
+export function usePageDrag(pageWidthPx: () => number, side: DragSide = 'right'): PageDragHandlers {
   const activePointer = useRef<number | null>(null);
   const startX = useRef(0);
 
@@ -81,7 +84,7 @@ export function usePageDrag(pageWidthPx: () => number): PageDragHandlers {
       event.currentTarget.setPointerCapture(event.pointerId);
       if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
       event.preventDefault();
-      readingMachine.beginDrag();
+      readingMachine.beginDrag(side);
     },
     onPointerMove(event) {
       if (activePointer.current !== event.pointerId) return;

@@ -47,6 +47,18 @@ export const BOOK_PAGE_FACE = {
   z: INNER_DEPTH / 2,
 } as const;
 
+/**
+ * The flat leaf in the frame of its hinge: where its free-edge side starts (`originX`), the bottom
+ * edge (`originY`) and its size. The curved leaf is built from the same numbers.
+ */
+export const LEAF_FRAME = {
+  originX: INNER_CENTER_X - INNER_WIDTH / 2 - HINGE_X,
+  originY: MIDDLE_Y - INNER_HEIGHT / 2,
+  width: INNER_WIDTH,
+  height: INNER_HEIGHT,
+  depth: LEAF_DEPTH,
+} as const;
+
 /** A box whose center is at (x, y, z) in the frame of its pivot. */
 function box(w: number, h: number, d: number, x: number, y: number, z: number): THREE.BufferGeometry {
   return placed(new THREE.BoxGeometry(w, h, d), [x, y, z]);

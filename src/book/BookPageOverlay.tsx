@@ -5,9 +5,9 @@ import { BOOK_FONT_STACK } from './bookFonts';
 import { layoutPages } from './bookPageLayout';
 import { PAGE_FADE_SECONDS } from './bookTimings';
 import FieldEditor from './FieldEditor';
-import { usePageRect } from './pageRect';
+import { mirrorPageRect, usePageRect } from './pageRect';
 import type { PageRect } from './pageRect';
-import { PAGE_COUNT } from './pageTurn';
+import { PAGE_COUNT, zoneAction } from './pageTurn';
 import { closeBook } from './readingBook';
 import { usePageTurnView } from './useReadingPhase';
 import { usePageDrag } from './useReadingInput';
@@ -57,9 +57,18 @@ const BUTTON_STYLE: CSSProperties = {
 
 const CLOSE_STYLE: CSSProperties = { ...BUTTON_STYLE, position: 'fixed', top: '16px', right: '16px', pointerEvents: 'auto' };
 
+/** Used until the driver has projected the page: the left half of the window. */
+const FALLBACK_LEFT_RECT: CSSProperties = { right: '50%', top: '7vh', width: 'min(480px, 46vw)', height: '86vh' };
+
 function rectStyle(rect: PageRect | null): CSSProperties {
   if (rect === null) return FALLBACK_RECT;
   return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+}
+
+/** The left zone is the projected page mirrored around the spine. */
+function leftRectStyle(rect: PageRect | null): CSSProperties {
+  if (rect === null) return FALLBACK_LEFT_RECT;
+  return rectStyle(mirrorPageRect(rect));
 }
 
 interface BookPageOverlayProps {
@@ -75,30 +84,49 @@ interface BookPageOverlayProps {
  */
 export default function BookPageOverlay({ project, onResurrect }: BookPageOverlayProps) {
   const rect = usePageRect();
-  const { index, status } = usePageTurnView();
+  const { index, status, turning } = usePageTurnView();
   const surface = useRef<HTMLDivElement>(null);
-  const drag = usePageDrag(() => surface.current?.getBoundingClientRect().width ?? 0);
+  const leftSurface = useRef<HTMLDivElement>(null);
+  const rightDrag = usePageDrag(() => surface.current?.getBoundingClientRect().width ?? 0, 'right');
+  const leftDrag = usePageDrag(() => leftSurface.current?.getBoundingClientRect().width ?? 0, 'left');
 
   const pages = layoutPages(project, onResurrect !== undefined);
   const page = pages[index] ?? pages[0];
   const resting = status === 'idle';
+  // The page content hides only while a leaf is moving, not for a drag that turns nothing.
+  const contentVisible = !turning;
+  const dragging = status === 'dragging' ? 'true' : undefined;
+  const grab = resting ? 'true' : undefined;
 
   return (
     <section role="dialog" aria-label={project.title} style={LAYER_STYLE}>
       <div
+        ref={leftSurface}
+        className="book-page-surface"
+        data-testid="book-left-zone"
+        data-zone-action={zoneAction(index, 'left')}
+        data-grab={grab}
+        data-dragging={dragging}
+        style={{ position: 'fixed', pointerEvents: 'auto', touchAction: 'none', ...leftRectStyle(rect) }}
+        {...leftDrag}
+      />
+      <div
         ref={surface}
         className="book-page-surface"
-        data-dragging={status === 'dragging' ? 'true' : undefined}
+        data-testid="book-right-zone"
+        data-zone-action={zoneAction(index, 'right')}
+        data-grab={grab}
+        data-dragging={dragging}
         style={{ position: 'fixed', pointerEvents: 'auto', touchAction: 'none', ...rectStyle(rect) }}
-        {...drag}
+        {...rightDrag}
       >
         <div
           data-testid="book-page-content"
           style={{
             ...CONTENT_STYLE,
-            opacity: resting ? 1 : 0,
-            pointerEvents: resting ? 'auto' : 'none',
-            transition: resting ? `opacity ${PAGE_FADE_SECONDS}s ease-out` : 'none',
+            opacity: contentVisible ? 1 : 0,
+            pointerEvents: contentVisible ? 'auto' : 'none',
+            transition: contentVisible ? `opacity ${PAGE_FADE_SECONDS}s ease-out` : 'none',
           }}
         >
           {page.title !== undefined && <h2 style={TITLE_STYLE}>{page.title}</h2>}

@@ -12,8 +12,9 @@ import {
   renderedLeafAngle,
   tickPageTurn,
   turnByKey,
+  turningLeafIndex,
 } from '../book/pageTurn';
-import type { PageTurnState, TurnDirection } from '../book/pageTurn';
+import type { DragSide, PageTurnState, TurnDirection } from '../book/pageTurn';
 import { MAX_FRAME_DELTA, PAGE_TURN } from '../book/bookTimings';
 
 const RUNS = { numRuns: 200 };
@@ -63,6 +64,11 @@ function apply(state: PageTurnState, op: Op): void {
   }
 }
 
+/** The page a drag must start on to turn in direction. */
+function sideOf(direction: TurnDirection): DragSide {
+  return direction === 'next' ? 'right' : 'left';
+}
+
 function stateAt(index: number): PageTurnState {
   const state = createPageTurnState();
   state.index = index;
@@ -75,7 +81,7 @@ function settleFully(state: PageTurnState): void {
 
 /** Drags `distance` px in `direction`, releases and settles. Returns the progress at release. */
 function dragAndRelease(state: PageTurnState, direction: TurnDirection, distance: number): number {
-  beginDrag(state);
+  beginDrag(state, sideOf(direction));
   dragTo(state, direction === 'next' ? -distance : distance, WIDTH);
   const progress = state.progress;
   endDrag(state);
@@ -131,7 +137,7 @@ describe('page turn properties', () => {
         expect(isIdle(released)).toBe(true);
 
         const cancelled = stateAt(index);
-        beginDrag(cancelled);
+        beginDrag(cancelled, sideOf(direction));
         dragTo(cancelled, direction === 'next' ? -distance : distance, WIDTH);
         cancelDrag(cancelled);
         settleFully(cancelled);
@@ -255,5 +261,37 @@ describe('page turn examples', () => {
     expect(leafAngle(state, 1)).toBeCloseTo(Math.PI / 2);
     expect(leafAngle(state, 2)).toBe(0);
     expect(renderedLeafAngle(state, 0, 0.5)).toBeCloseTo(Math.PI / 2);
+  });
+});
+
+describe('turningLeafIndex', () => {
+  it('is null at rest and before the dead zone is passed', () => {
+    const state = stateAt(1);
+    expect(turningLeafIndex(state)).toBeNull();
+    beginDrag(state);
+    dragTo(state, -(PAGE_TURN.deadzonePx - 1), WIDTH);
+    expect(turningLeafIndex(state)).toBeNull();
+  });
+
+  it('is the leaf of the current page going forward and the one before it going back', () => {
+    const forward = stateAt(1);
+    beginDrag(forward);
+    dragTo(forward, -WIDTH * PAGE_TURN.fullTurnRatio * 0.5, WIDTH);
+    expect(turningLeafIndex(forward)).toBe(1);
+
+    const backward = stateAt(2);
+    beginDrag(backward, 'left');
+    dragTo(backward, WIDTH * PAGE_TURN.fullTurnRatio * 0.25, WIDTH);
+    expect(turningLeafIndex(backward)).toBe(1);
+  });
+
+  it('is null for a keyboard turn that has not moved yet, and again once it lands', () => {
+    const state = stateAt(0);
+    turnByKey(state, 'next');
+    expect(turningLeafIndex(state)).toBeNull();
+    tickPageTurn(state, PAGE_TURN.settleSeconds / 2);
+    expect(turningLeafIndex(state)).toBe(0);
+    settleFully(state);
+    expect(turningLeafIndex(state)).toBeNull();
   });
 });

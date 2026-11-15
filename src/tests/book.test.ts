@@ -13,6 +13,7 @@ import type { Project } from '../domain';
 import { BOOK_SIZE, createBookAssets } from '../book/bookAssets';
 import { getBookHandle, registerBookHandle } from '../book/bookHandles';
 import { BOOK_REST_FOOTPRINT, BOOK_REST_SCALE, applyRestPose, createBookModel } from '../book/bookModel';
+import { beginLeafCurl, createLeafCurlMesh, disposeLeafCurlMesh, writeLeafCurl } from '../book/leafCurlMesh';
 import { emptyData } from '../store/persistence';
 import { createGraveyardStore } from '../store';
 
@@ -212,6 +213,33 @@ describe('book model', () => {
       expect(object.castShadow).toBe(false);
       expect(object.receiveShadow).toBe(false);
     });
+  });
+
+  it('exposes the four parts through getBookHandle(id).parts, also while a curl is active', () => {
+    const model = createBookModel(assets);
+    const remove = registerBookHandle({ id: 'p-parts', root: model.root, parts: model.parts, leaves: model.leaves });
+    const curl = createLeafCurlMesh();
+    const check = (): void => {
+      const handle = getBookHandle('p-parts')!;
+      expect(Object.keys(handle.parts).sort()).toEqual(['cover', 'pageBlock', 'pages', 'spine']);
+      const { cover, spine, pageBlock, pages } = handle.parts;
+      expect(new Set([cover, spine, pageBlock, pages]).size).toBe(4);
+      [cover, spine, pageBlock, pages].forEach((part) => {
+        let reachable = false;
+        handle.root.traverse((object) => {
+          if (object === part) reachable = true;
+        });
+        expect(reachable).toBe(true);
+      });
+      expect([cover, spine, pageBlock, pages].map((part) => meshesOf(part).length)).toEqual([1, 1, 1, 3]);
+    };
+    check();
+    beginLeafCurl(curl, meshesOf(model.parts.pages)[1]!);
+    writeLeafCurl(curl, 0.5);
+    check();
+    disposeLeafCurlMesh(curl);
+    check();
+    remove();
   });
 
   it('is reachable by project id through its handle', () => {

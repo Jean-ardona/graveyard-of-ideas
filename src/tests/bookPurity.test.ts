@@ -9,6 +9,7 @@ const SOURCES = import.meta.glob<string>(
     '../book/readingMachine.ts',
     '../book/readingKeys.ts',
     '../book/bookPageLayout.ts',
+    '../book/leafCurl.ts',
     '../interaction/uiMode.ts',
   ],
   { query: '?raw', import: 'default', eager: true },
@@ -24,8 +25,8 @@ function withoutComments(source: string): string {
 }
 
 describe('pure book core', () => {
-  it('scans all seven modules', () => {
-    expect(Object.keys(SOURCES)).toHaveLength(7);
+  it('scans all eight modules', () => {
+    expect(Object.keys(SOURCES)).toHaveLength(8);
   });
 
   it.each(Object.entries(SOURCES))('%s imports no React or Three.js and uses no DOM or timers', (_file, source) => {

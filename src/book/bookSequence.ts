@@ -78,6 +78,24 @@ function enterClosed(state: SequenceState): void {
   state.closePending = false;
 }
 
+/** Inverse of `easeInOutCubic` on [0, 1]; NaN counts as 1 (fully open). */
+function inverseEaseInOutCubic(y: number): number {
+  const v = Number.isNaN(y) ? 1 : clamp01(y);
+  const x = v < 0.5 ? Math.cbrt(v / 4) : 1 - Math.cbrt(2 * (1 - v)) / 2;
+  return clamp01(x);
+}
+
+/**
+ * Closes from an open book whose cover was scrubbed to `openFraction` (1 open, 0 closed): sets `t`
+ * so the eased cover progress equals the fraction, then starts closing. The cover continues from
+ * its current angle with no jump, then the rest of the closing sequence runs. Only from `open`.
+ */
+export function startClosingFromCover(state: SequenceState, openFraction: number): void {
+  if (state.phase !== 'open') return;
+  state.t = APPROACH_END + SEQUENCE_TIMINGS.coverSeconds * inverseEaseInOutCubic(openFraction);
+  enterClosing(state);
+}
+
 /**
  * Applies one event to the state. `pagesIdle` tells whether the page model is at rest;
  * closing from `open` waits for it. OPEN is accepted only from `closed`; whether the

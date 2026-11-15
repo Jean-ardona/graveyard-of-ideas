@@ -36,6 +36,28 @@ The planning is already written here, so credits go to implementation. Run one t
 - P23 Page layout shows the required content per page (title and date; reason and idea; next action and reduced version; never goal, epitaph or notes); the resurrection button is disabled without a handler.
 - P24 Key routing: Escape closes, E closes only outside text fields, arrows turn pages only outside text fields.
 
+### Curved page turn (task 5.3.6, design properties 16-22; design property N is playbook P(N+9))
+- P25 The leaf is flat at the ends: progress 0 gives every segment angle 0, progress 1 gives pi, and the strip lies on the flat leaf.
+- P26 Arc length is constant: every segment has length width / segments, the strip starts at the hinge, the total equals the leaf width.
+- P27 Angles are finite and inputs are clamped: NaN, infinities and out-of-range progress give the result of the clamped value; angles in [0, pi]; positions and normals finite.
+- P28 Curvature is symmetric around the middle of the turn: same at progress and 1 - progress, never positive, largest at 0.5.
+- P29 The spine angle opens monotonically: segment 0 equals pi * progress, the rigid leaf angle.
+- P30 The shape depends on the progress alone: forward, back and forward again write bit-identical angles, positions and normals.
+- P31 Only the turning leaf is deformed: `turningLeafIndex` is null at rest and otherwise the one leaf strictly between 0 and pi; no curl with the cover below 1 or with reduced motion.
+
+### Two drag zones and closing gestures (fix after 5.3.6; test tags use design numbers 28-32, so playbook P(N+4))
+- P32 The wrong direction does nothing: dragging right from the right page or left from the left page leaves the whole page state equal to its starting state, with no progress and no direction (no jitter).
+- P33 Next then previous returns to the same page: a completed drag from the right zone followed by a completed drag from the left zone ends idle on the starting page.
+- P34 A closing gesture needs half the distance: from the left zone on page 0 or the right zone on the last page, a release at or above 50% requests close and below it does not; no leaf moves; cancel never requests it.
+- P35 No leaf is both turned and unturned: for any sequence of drags from both sides, keys and ticks, leaf angles are non-increasing, at most one leaf lies strictly between 0 and pi, and idle means every leaf is exactly 0 or pi.
+- P36 Curl strength scales the bend: strength 0 is rigid, 1 is the full tip lag, a stronger curl never bends less; flat ends, constant arc length, finite angles and symmetry hold at any strength.
+
+### Cover scrub on the closing gesture (fix after the two-zone drag fix; test tags use design numbers 33-36, so playbook P(N+4))
+- P37 The cover angle is monotonic in the drag progress: a longer closing drag never opens the cover more; the angle is `COVER_OPEN_ANGLE * (1 - progress)`.
+- P38 Release below 50% returns exactly to the open state: after release or cancel, the book is `open` at `t = TOTAL`, cover progress 1, the page model equals a fresh one and the cover angle is exactly `COVER_OPEN_ANGLE`.
+- P39 Release above 50% reaches closed without a jump: the closing starts at the scrubbed cover value, the cover never reopens, and the book ends `closed` on page 0.
+- P40 The cover angle never leaves the open-to-closed range: for any progress (NaN, infinities, zero, out of range), any status and reduced motion, the open fraction is in [0, 1] and the angle in [0, `COVER_OPEN_ANGLE`].
+
 ## 3. Hooks worth creating in Kiro
 - On save of files in src/domain: run the domain test suite.
 - On creating a new file in src/world or src/cinematics: remind to dispose geometries/materials and add cleanup.

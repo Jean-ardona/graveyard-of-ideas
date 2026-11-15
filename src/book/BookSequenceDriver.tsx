@@ -1,16 +1,28 @@
 import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Quaternion, Vector3 } from 'three';
-import type { Camera } from 'three';
+import type { Camera, Mesh, Object3D } from 'three';
 import { getPointerMode, releasePointer, requestPointer, subscribePointerMode } from '../interaction/pointerLock';
+import { appStore } from '../store/appStore';
 import { BOOK_PAGE_FACE, BOOK_PIVOTS, BOOK_SIZE } from './bookAssets';
 import { getBookHandle } from './bookHandles';
 import { LEAF_COUNT, leafCoverProgress, leafHingeAngle, leafHingeZ, leafTurnFraction } from './bookStack';
 import type { BookHandle } from './bookHandles';
 import { isOpening } from './bookSequence';
-import { COVER_OPEN_ANGLE, LIFT_HEIGHT, READING_POSE } from './bookTimings';
+import { LIFT_HEIGHT, READING_POSE } from './bookTimings';
+import { coverAngle, coverOpenFraction } from './coverScrub';
 import { clearPageRect, writePageRect } from './pageRect';
-import { isIdle, renderedLeafAngle } from './pageTurn';
+import { curledLeafIndex } from './leafCurl';
+import {
+  beginLeafCurl,
+  createLeafCurlMesh,
+  curlHingeRotation,
+  disposeLeafCurlMesh,
+  endLeafCurl,
+  writeLeafCurl,
+} from './leafCurlMesh';
+import type { LeafCurlMesh } from './leafCurlMesh';
+import { isIdle, leafAngle, renderedLeafAngle } from './pageTurn';
 import { closeBook, getReadingProjectId } from './readingBook';
 import { readingMachine } from './readingMachine';
 
@@ -68,8 +80,51 @@ function applyPose(handle: BookHandle): void {
   root.position.lerp(targetPosition, approach);
   root.quaternion.copy(baseQuaternion).slerp(targetQuaternion, approach);
   root.scale.setScalar(baseScale + (1 - baseScale) * approach);
-  handle.parts.cover.rotation.y = -COVER_OPEN_ANGLE * cover;
-  applyLeaves(handle, cover);
+  // A closing gesture scrubs the rigid cover about the spine; the leaves fold with it like in the closing sequence.
+  const scrubbed = cover * coverOpenFraction(readingMachine.pages, appStore.getState().data.prefs.reducedMotion);
+  handle.parts.cover.rotation.y = -coverAngle(scrubbed);
+  applyLeaves(handle, scrubbed);
+}
+
+/** The curl geometry of the open book: made when the book leaves `closed`, disposed at `closed`. */
+let curlMesh: LeafCurlMesh | null = null;
+
+/** The leaf mesh inside a leaf hinge group. */
+function leafMesh(leaf: Object3D): Mesh {
+  return leaf.children[0] as Mesh;
+}
+
+/**
+ * Gives the curl geometry to the turning leaf and takes it back from a leaf that no longer turns.
+ * Returns the index of the leaf drawn curved, or -1. A leaf that gets its flat geometry back is
+ * marked unwritten, so its hinge is written again with the usual rigid angle.
+ */
+function syncCurl(handle: BookHandle, cover: number): number {
+  const curl = curlMesh;
+  if (curl === null) return -1;
+  const wanted = curledLeafIndex(readingMachine.pages, cover, appStore.getState().data.prefs.reducedMotion);
+  const showing = curl.leaf === null ? -1 : handle.leaves.indexOf(curl.leaf.parent as Object3D);
+  if (showing === wanted) return wanted;
+  if (showing >= 0 && endLeafCurl(curl)) writtenLeafFractions[showing] = Number.NaN;
+  if (wanted >= 0) beginLeafCurl(curl, leafMesh(handle.leaves[wanted]!));
+  return wanted;
+}
+
+/** Returns the flat geometry to any curled leaf, then frees the curl geometry. */
+function releaseCurl(): void {
+  if (curlMesh === null) return;
+  disposeLeafCurlMesh(curlMesh);
+  curlMesh = null;
+}
+
+/** Draws the turning leaf as a strip: the hinge carries the offset, the buffers the bend. */
+function applyCurledLeaf(handle: BookHandle, j: number): void {
+  const curl = curlMesh!;
+  const fraction = leafTurnFraction(leafAngle(readingMachine.pages, j));
+  if (!writeLeafCurl(curl, fraction)) return;
+  const leaf = handle.leaves[j]!;
+  leaf.rotation.y = curlHingeRotation(j, fraction);
+  leaf.position.z = leafHingeZ(j, fraction);
 }
 
 /**
@@ -79,7 +134,12 @@ function applyPose(handle: BookHandle): void {
  */
 function applyLeaves(handle: BookHandle, cover: number): void {
   const { leaves } = handle;
+  const curledIndex = syncCurl(handle, cover);
   for (let j = 0; j < leaves.length; j++) {
+    if (j === curledIndex) {
+      applyCurledLeaf(handle, j);
+      continue;
+    }
     const fraction = leafTurnFraction(renderedLeafAngle(readingMachine.pages, j, leafCoverProgress(j, cover)));
     if (fraction === writtenLeafFractions[j]) continue;
     writtenLeafFractions[j] = fraction;
@@ -90,7 +150,8 @@ function applyLeaves(handle: BookHandle, cover: number): void {
 }
 
 /**
- * Projects the open right-hand page to screen pixels. The camera is frozen and the book rests
+ * Projects the open right-hand page and the spine to screen pixels (the left zone is a mirror of
+ * the page around the spine, see `mirrorPageRect`). The camera is frozen and the book rests
  * in a fixed pose, so this runs once on reaching `open` and when the canvas size changes.
  */
 function projectPageRect(handle: BookHandle, camera: Camera, width: number, height: number): void {
@@ -104,7 +165,10 @@ function projectPageRect(handle: BookHandle, camera: Camera, width: number, heig
   pageCorner.applyMatrix4(handle.root.matrixWorld).project(camera);
   const right = ((pageCorner.x + 1) / 2) * width;
   const bottom = ((1 - pageCorner.y) / 2) * height;
-  writePageRect(left, top, right - left, bottom - top);
+  pageCorner.set(BOOK_PIVOTS.frontBoard[0], BOOK_PAGE_FACE.minY, BOOK_PAGE_FACE.z);
+  pageCorner.applyMatrix4(handle.root.matrixWorld).project(camera);
+  const spineX = ((pageCorner.x + 1) / 2) * width;
+  writePageRect(left, top, right - left, bottom - top, spineX);
 }
 
 /**
@@ -138,7 +202,10 @@ export default function BookSequenceDriver() {
       if (wasClosed && !closed) {
         const id = getReadingProjectId();
         active.current = (id !== null && getBookHandle(id)) || null;
-        if (active.current) captureReadingPose(active.current, camera);
+        if (active.current) {
+          captureReadingPose(active.current, camera);
+          curlMesh = createLeafCurlMesh();
+        }
       }
       wasClosed = closed;
 
@@ -157,6 +224,7 @@ export default function BookSequenceDriver() {
       if (closed) {
         active.current = null;
         clearPageRect();
+        releaseCurl();
       }
     });
 
@@ -168,6 +236,7 @@ export default function BookSequenceDriver() {
     return () => {
       unsubscribeMachine();
       unsubscribePointer();
+      releaseCurl();
     };
   }, [camera]);
 

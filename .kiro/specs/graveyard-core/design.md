@@ -168,6 +168,14 @@ Walking and look are locked from the moment OPEN is accepted until the book is `
 - Edge detection (released to not released and back) is a pure helper `pointerEdge(prev, next)` so it can be tested; the effect calls stay in the driver.
 - Cursor: CSS `cursor: grab` on hover over a page, `grabbing` while dragging (attribute `data-dragging`). Inputs and textareas keep `cursor: text`, buttons `cursor: pointer`.
 
+### Two drag zones and closing gestures (fix after task 5.3.6)
+
+The drag side decides the action. Grab the right page and drag left to turn forward; grab the left page and drag right to turn back. The other way does nothing. On the first page the left zone closes the book and on the last page the right zone closes it, with the same 50 percent rule and no new mesh. The left zone is the projected right page mirrored around the projected spine (`mirrorPageRect`, written with the page rectangle, never per frame). `PageTurnState` gains `side`, `closeDrag` and `closeRequested`; `zoneAction(index, side)` returns `next`, `prev` or `close`. `CURL_STRENGTH` (default 0.6, in `bookTimings.ts`) scales the tip lag of `leafCurl`. Properties 28 to 32 (playbook P32 to P36): the wrong direction does nothing; next then previous returns to the same page; a closing gesture needs half the distance; no leaf is both turned and unturned; strength scales the bend.
+
+### Cover scrub (fix after the two-zone drag fix)
+
+A closing gesture scrubs the rigid cover about the spine, with no curl. The machine stays in `open` with `t = TOTAL` during the drag, so invariants I1 to I6 hold unchanged. The pure `coverScrub.ts` derives the cover open fraction from the drag: `1 - progress` (1 open, 0 closed), and the angle `COVER_OPEN_ANGLE * fraction`. The driver multiplies the cover progress by the fraction, and the leaves fold with it as in the closing sequence. On release below 50 percent, `progress` settles back to 0 like a returned page; Escape does the same. Past 50 percent, `startClosingFromCover` sets `t` inside the cover phase so that the eased cover progress equals the scrubbed fraction (inverse of the cover ease), then the normal closing runs: no jump. The page content hides during the scrub, as for a page turn. With reduced motion the fraction stays 1 and the release closes at once. Properties 33 to 36 (playbook P37 to P40): the angle is monotonic in the progress; release below 50 percent returns exactly to open; release above 50 percent reaches closed without a jump; the angle never leaves [0, `COVER_OPEN_ANGLE`] for any input.
+
 ### Page-turn model (`pageTurn.ts`)
 ```ts
 interface PageTurnState {
@@ -517,4 +525,4 @@ Zustand store with a localStorage adapter, versioned JSON, debounced autosave, e
 A non-3D view of the grimoire exposing all create, read, edit, resurrect, honor, export and import functions. Used as a fallback and as a low-end path.
 
 ## Testing strategy
-Unit tests for domain functions. Property-based tests (fast-check) for the invariants and for export/import round trips. Manual performance checks on the target low-end machine at each milestone. The book interaction properties (task 5.3, Properties 1 to 27, including the curved page turn and the leaf text) are listed in "Book interaction (task 5.3)".
+Unit tests for domain functions. Property-based tests (fast-check) for the invariants and for export/import round trips. Manual performance checks on the target low-end machine at each milestone. The book interaction properties (task 5.3, Properties 1 to 36, including the curved page turn, the leaf text and the cover scrub) are listed in "Book interaction (task 5.3)".

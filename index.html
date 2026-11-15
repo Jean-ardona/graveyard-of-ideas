@@ -16,7 +16,8 @@
       *, *::before, *::after { box-sizing: border-box; }
       @keyframes book-page-fade-in { from { opacity: 0; } to { opacity: 1; } }
       @media (prefers-reduced-motion: reduce) { [data-testid='book-page-content'] { animation: none !important; } }
-      .book-page-surface { cursor: grab; user-select: none; -webkit-user-select: none; }
+      .book-page-surface { user-select: none; -webkit-user-select: none; }
+      .book-page-surface[data-grab='true'] { cursor: grab; }
       .book-page-surface[data-dragging='true'], .book-page-surface[data-dragging='true'] * { cursor: grabbing; }
       .book-page-surface input, .book-page-surface textarea { cursor: text; user-select: text; -webkit-user-select: text; }
       .book-page-surface select, .book-page-surface button:not(:disabled) { cursor: pointer; }

@@ -27,5 +27,17 @@ export const PAGE_TURN = {
   settleSeconds: 0.3,
 } as const;
 
+/**
+ * Curved page turn. `segments` is the number of equal pieces of the bending leaf; `tipLag` is the
+ * most, in radians, by which the free edge trails the spine. Below 1, so every angle stays in [0, pi].
+ */
+export const LEAF_CURL = { segments: 12, tipLag: 0.8 } as const;
+
+/**
+ * How much of `LEAF_CURL.tipLag` the bend uses, 0 to 1. 0 keeps the leaf rigid, 1 bends it by the
+ * full tip lag. The default is a gentler bend than the full one.
+ */
+export const CURL_STRENGTH = 0.6;
+
 /** CSS fade of the page content after a turn. */
 export const PAGE_FADE_SECONDS = 0.15;

@@ -13,13 +13,19 @@ const PAGE_WIDTH = 100;
 
 function Harness() {
   useReadingInput();
-  const drag = usePageDrag(() => PAGE_WIDTH);
+  const drag = usePageDrag(() => PAGE_WIDTH, 'right');
+  const leftDrag = usePageDrag(() => PAGE_WIDTH, 'left');
   return (
-    <div data-testid="surface" {...drag}>
-      <input aria-label="field" />
-      <textarea aria-label="area" />
-      <select aria-label="choice" />
-      <button>press</button>
+    <div>
+      <div data-testid="left" {...leftDrag}>
+        <input aria-label="left field" />
+      </div>
+      <div data-testid="surface" {...drag}>
+        <input aria-label="field" />
+        <textarea aria-label="area" />
+        <select aria-label="choice" />
+        <button>press</button>
+      </div>
     </div>
   );
 }
@@ -95,9 +101,63 @@ describe('page input', () => {
     it('turns back to the previous page when dragged right', () => {
       act(() => readingMachine.turnPage('next'));
       settleTurn();
-      dragBy(screen.getByTestId('surface'), 60);
+      dragBy(screen.getByTestId('left'), 60);
       settleTurn();
       expect(readingMachine.pages.index).toBe(0);
+    });
+
+    it('does nothing when a zone is dragged the wrong way', () => {
+      act(() => readingMachine.turnPage('next'));
+      settleTurn();
+      dragBy(screen.getByTestId('surface'), 70);
+      settleTurn();
+      dragBy(screen.getByTestId('left'), -70);
+      settleTurn();
+      expect(readingMachine.pages.index).toBe(1);
+      expect(readingMachine.pages.status).toBe('idle');
+      expect(readingMachine.phase()).toBe('open');
+    });
+
+    it('closes the book when the left zone is dragged right on the first page', () => {
+      dragBy(screen.getByTestId('left'), 39);
+      expect(readingMachine.phase()).toBe('open');
+      settleTurn();
+      dragBy(screen.getByTestId('left'), 40);
+      expect(readingMachine.phase()).toBe('closing');
+    });
+
+    it('closes the book when the right zone is dragged left on the last page', () => {
+      for (let i = 0; i < 2; i++) {
+        act(() => readingMachine.turnPage('next'));
+        settleTurn();
+      }
+      dragBy(screen.getByTestId('surface'), -39);
+      expect(readingMachine.phase()).toBe('open');
+      settleTurn();
+      dragBy(screen.getByTestId('surface'), -40);
+      expect(readingMachine.phase()).toBe('closing');
+    });
+
+    it('does not close from a closing gesture cancelled with Escape, and arrows never close at the ends', () => {
+      dragBy(screen.getByTestId('left'), 70, false);
+      expect(readingMachine.pages.status).toBe('dragging');
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      expect(readingMachine.phase()).toBe('open');
+      settleTurn();
+      expect(readingMachine.pages.status).toBe('idle');
+      fireEvent.keyDown(document.body, { key: 'ArrowLeft' });
+      expect(readingMachine.phase()).toBe('open');
+    });
+
+    it('closes at once with reduced motion', () => {
+      setReducedMotion(true);
+      dragBy(screen.getByTestId('left'), 70);
+      expect(readingMachine.phase()).toBe('closed');
+    });
+
+    it('never starts a left-zone drag on an input', () => {
+      fireEvent.pointerDown(screen.getByLabelText('left field'), { pointerId: 1, button: 0, clientX: 300 });
+      expect(readingMachine.pages.status).toBe('idle');
     });
 
     it('ignores a drag toward a page that does not exist', () => {
