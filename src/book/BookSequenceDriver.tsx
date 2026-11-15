@@ -21,6 +21,8 @@ const baseQuaternion = new Quaternion();
 const targetPosition = new Vector3();
 const targetQuaternion = new Quaternion();
 const parentQuaternion = new Quaternion();
+/** Uniform scale of the resting book; it shrinks to 1 on the way to the reading pose. */
+let baseScale = 1;
 
 /**
  * Where the book origin (bottom center) sits in camera space when open: the spine on the
@@ -38,6 +40,7 @@ function captureReadingPose(handle: BookHandle, camera: Camera): void {
   const { root } = handle;
   basePosition.copy(root.position);
   baseQuaternion.copy(root.quaternion);
+  baseScale = root.scale.x;
   targetPosition.set(READING_X, READING_Y, READING_Z).applyQuaternion(camera.quaternion).add(camera.position);
   targetQuaternion.copy(camera.quaternion);
   const parent = root.parent;
@@ -58,6 +61,7 @@ function applyPose(handle: BookHandle): void {
   root.position.y += LIFT_HEIGHT * lift;
   root.position.lerp(targetPosition, approach);
   root.quaternion.copy(baseQuaternion).slerp(targetQuaternion, approach);
+  root.scale.setScalar(baseScale + (1 - baseScale) * approach);
   handle.parts.cover.rotation.y = -COVER_OPEN_ANGLE * cover;
 }
 

@@ -13,7 +13,7 @@ import type { Project } from '../domain';
 import { BOOK_PARTS } from '../book/bookParts';
 import { BOOK_SIZE, createBookAssets } from '../book/bookAssets';
 import { getBookHandle, registerBookHandle } from '../book/bookHandles';
-import { createBookModel } from '../book/bookModel';
+import { BOOK_REST_FOOTPRINT, BOOK_REST_SCALE, applyRestPose, createBookModel } from '../book/bookModel';
 import { emptyData } from '../store/persistence';
 import { createGraveyardStore } from '../store';
 
@@ -206,6 +206,20 @@ describe('book model', () => {
     expect(Math.abs(open.min.x - spineAxisX)).toBeLessThanOrEqual(0.0061);
     expect(Math.abs(open.max.x - spineAxisX)).toBeLessThanOrEqual(0.0061);
     expect(cover.position.x).toBe(spineAxisX);
+  });
+
+  it('lies flat at rest: cover up, resting on the surface, footprint scaled, geometry still shared', () => {
+    const model = createBookModel(assets);
+    applyRestPose(model.root);
+    const box = worldBox(model.root);
+    expect(box.min.y).toBeCloseTo(0, 6);
+    expect(box.max.x - box.min.x).toBeCloseTo(BOOK_REST_FOOTPRINT.width, 6);
+    expect(box.max.z).toBeCloseTo(0, 6);
+    expect(box.min.z).toBeCloseTo(-BOOK_REST_FOOTPRINT.length, 6);
+    expect(box.max.y - box.min.y).toBeCloseTo(BOOK_SIZE.depth * BOOK_REST_SCALE, 6);
+    expect(new Set(meshesOf(model.root).map((mesh) => mesh.geometry))).toEqual(
+      new Set([assets.frontBoard, assets.spine, assets.pageBlock, assets.leaf]),
+    );
   });
 
   it('adds no light and no shadow flag', () => {

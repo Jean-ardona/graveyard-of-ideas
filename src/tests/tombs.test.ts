@@ -108,6 +108,19 @@ describe('slabOffset', () => {
 });
 
 describe('tomb colliders', () => {
+  it('extends toward the front to cover the plinth, keeping the back edge', () => {
+    const [buried] = bury('A');
+    const descriptor = toTombDescriptor(buried as Project)!;
+    const plain = tombCollider(descriptor);
+    const reach = 1.2;
+    const wide = tombCollider(descriptor, reach);
+    const localZ = (box: typeof plain, offset: number) =>
+      (box.x - descriptor.x) * Math.sin(descriptor.rotation) + (box.z - descriptor.z) * Math.cos(descriptor.rotation) + offset;
+    expect(localZ(wide, wide.halfDepth)).toBeCloseTo(reach, 9);
+    expect(localZ(wide, -wide.halfDepth)).toBeCloseTo(-plain.halfDepth, 9);
+    expect(tombCollider(descriptor, 0)).toEqual(plain);
+  });
+
   it('registers and removes a collider without touching the fixed ones', () => {
     const [project] = bury('A');
     const box = tombCollider(toTombDescriptor(project as Project)!);

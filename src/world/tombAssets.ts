@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { BOOK_REST_FOOTPRINT } from '../book';
 import { COLORS } from './config';
 import { mergeParts, placed } from './geometryUtils';
 import type { TombShape } from './tombLogic';
@@ -7,16 +8,26 @@ import type { TombShape } from './tombLogic';
 
 const BODY_DEPTH = 0.5;
 const BASE_TOP = 0.15;
-/** Slab and recess cover this vertical band of the front face. */
+/** The slab covers this vertical band of the front face, flush against the body. */
 const SLAB_WIDTH = 0.76;
 const SLAB_HEIGHT = 0.55;
 const SLAB_CENTER_Y = 0.525;
-const RECESS_DEPTH = 0.04;
-const SLAB_DEPTH = 0.1;
-/** Floor and front of the cavity behind the slab, in tomb coordinates. */
-export const CAVITY = {
-  floorY: SLAB_CENTER_Y - SLAB_HEIGHT / 2,
-  frontZ: BODY_DEPTH / 2 + RECESS_DEPTH,
+const SLAB_DEPTH = 0.14;
+/**
+ * A low stone step in front of the slab. The closed book lies on top of it, in plain view.
+ * Coordinates are in tomb space: `topY` is the surface, `frontZ` the edge nearest the player.
+ */
+const PLINTH_MARGIN = 0.05;
+const PLINTH_BACK_Z = BODY_DEPTH / 2 + SLAB_DEPTH;
+export const PLINTH = {
+  width: 0.76,
+  /** Reaches down into the base, so no gap shows under it. */
+  bottomY: -0.1,
+  topY: 0.2,
+  depth: BOOK_REST_FOOTPRINT.length + 2 * PLINTH_MARGIN,
+  backZ: PLINTH_BACK_Z,
+  /** Where the book origin (its bottom edge) goes: the book extends from here toward the tomb. */
+  bookZ: PLINTH_BACK_Z + PLINTH_MARGIN + BOOK_REST_FOOTPRINT.length,
 } as const;
 /** The engraved name sits above the slab. */
 export const NAME_PLANE = { width: 0.7, height: 0.35, centerY: 1.0 } as const;
@@ -60,12 +71,11 @@ function createBody(shape: TombShape): THREE.BufferGeometry {
 
 export interface TombAssets {
   bodies: Readonly<Record<TombShape, THREE.BufferGeometry>>;
-  recess: THREE.BufferGeometry;
+  plinth: THREE.BufferGeometry;
   slab: THREE.BufferGeometry;
   namePlane: THREE.BufferGeometry;
   stone: THREE.Material;
   slabStone: THREE.Material;
-  recessDark: THREE.Material;
   dispose(): void;
 }
 
@@ -76,15 +86,15 @@ export function createTombAssets(): TombAssets {
     worn: createBody('worn'),
     cross: createBody('cross'),
   };
-  const recess = box(SLAB_WIDTH, SLAB_HEIGHT, RECESS_DEPTH, 0, SLAB_CENTER_Y, BODY_DEPTH / 2 + RECESS_DEPTH / 2);
-  const slab = box(
-    SLAB_WIDTH,
-    SLAB_HEIGHT,
-    SLAB_DEPTH,
+  const plinth = box(
+    PLINTH.width,
+    PLINTH.topY - PLINTH.bottomY,
+    PLINTH.depth,
     0,
-    SLAB_CENTER_Y,
-    BODY_DEPTH / 2 + RECESS_DEPTH + SLAB_DEPTH / 2,
+    (PLINTH.topY + PLINTH.bottomY) / 2,
+    PLINTH.backZ + PLINTH.depth / 2,
   );
+  const slab = box(SLAB_WIDTH, SLAB_HEIGHT, SLAB_DEPTH, 0, SLAB_CENTER_Y, BODY_DEPTH / 2 + SLAB_DEPTH / 2);
   const namePlane = placed(new THREE.PlaneGeometry(NAME_PLANE.width, NAME_PLANE.height), [
     0,
     NAME_PLANE.centerY,
@@ -92,19 +102,17 @@ export function createTombAssets(): TombAssets {
   ]);
   const stone = new THREE.MeshStandardMaterial({ color: COLORS.stone, flatShading: true, roughness: 1 });
   const slabStone = new THREE.MeshStandardMaterial({ color: COLORS.stoneDark, flatShading: true, roughness: 1 });
-  const recessDark = new THREE.MeshBasicMaterial({ color: COLORS.tombRecess });
 
   return {
     bodies,
-    recess,
+    plinth,
     slab,
     namePlane,
     stone,
     slabStone,
-    recessDark,
     dispose() {
       Object.values(bodies).forEach((geometry) => geometry.dispose());
-      [recess, slab, namePlane, stone, slabStone, recessDark].forEach((resource) => resource.dispose());
+      [plinth, slab, namePlane, stone, slabStone].forEach((resource) => resource.dispose());
     },
   };
 }

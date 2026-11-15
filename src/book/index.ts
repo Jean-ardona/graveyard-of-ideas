@@ -4,6 +4,7 @@ export { default as BookSequenceDriver } from './BookSequenceDriver';
 export { useReadingInput } from './useReadingInput';
 export { useReadingPhase } from './useReadingPhase';
 export { createBookAssets, BOOK_SIZE } from './bookAssets';
+export { BOOK_REST_FOOTPRINT } from './bookModel';
 export type { BookAssets } from './bookAssets';
 export { getBookHandle } from './bookHandles';
 export type { BookHandle, BookParts } from './bookHandles';

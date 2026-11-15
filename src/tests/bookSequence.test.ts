@@ -145,14 +145,15 @@ describe('sequence examples', () => {
     return { phase: 'lifting', t, closePending: false };
   }
 
-  it('changes phase exactly at t = 0.6, 1.4 and 2.2', () => {
+  it('changes phase exactly at the end of each step', () => {
+    const below = 1e-4;
     const cases: Array<[number, string]> = [
-      [0.5999, 'lifting'],
-      [0.6, 'approaching'],
-      [1.3999, 'approaching'],
-      [1.4, 'coverOpening'],
-      [2.1999, 'coverOpening'],
-      [2.2, 'open'],
+      [LIFT_END - below, 'lifting'],
+      [LIFT_END, 'approaching'],
+      [APPROACH_END - below, 'approaching'],
+      [APPROACH_END, 'coverOpening'],
+      [TOTAL_SECONDS - below, 'coverOpening'],
+      [TOTAL_SECONDS, 'open'],
     ];
     for (const [t, phase] of cases) {
       const state = stateAt(t);
@@ -162,20 +163,20 @@ describe('sequence examples', () => {
   });
 
   it('discards the time left over at the end points', () => {
-    const opening = stateAt(2.19);
-    tickSequence(opening, 0.05, true);
+    const opening = stateAt(TOTAL_SECONDS - MAX_FRAME_DELTA / 5);
+    tickSequence(opening, MAX_FRAME_DELTA, true);
     expect(opening).toEqual({ phase: 'open', t: TOTAL_SECONDS, closePending: false });
 
-    const closing: SequenceState = { phase: 'closing', t: 0.01, closePending: false };
-    tickSequence(closing, 0.05, true);
+    const closing: SequenceState = { phase: 'closing', t: MAX_FRAME_DELTA / 5, closePending: false };
+    tickSequence(closing, MAX_FRAME_DELTA, true);
     expect(closing).toEqual({ phase: 'closed', t: 0, closePending: false });
   });
 
   it('ignores OPEN while running and CLOSE or SKIP while closed', () => {
-    const running = stateAt(1);
+    const running = stateAt(LIFT_END + 0.1);
     running.phase = 'approaching';
     applySequenceEvent(running, 'OPEN', true);
-    expect(running).toEqual({ phase: 'approaching', t: 1, closePending: false });
+    expect(running).toEqual({ phase: 'approaching', t: LIFT_END + 0.1, closePending: false });
 
     const closed = createSequenceState();
     applySequenceEvent(closed, 'CLOSE', true);

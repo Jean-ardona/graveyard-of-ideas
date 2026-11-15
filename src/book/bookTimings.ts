@@ -1,5 +1,5 @@
 /** Durations in seconds of the three opening steps. The closing sequence plays them in reverse. */
-export const SEQUENCE_TIMINGS = { liftSeconds: 0.6, approachSeconds: 0.8, coverSeconds: 0.8 } as const;
+export const SEQUENCE_TIMINGS = { liftSeconds: 1.0, approachSeconds: 1.2, coverSeconds: 1.2 } as const;
 
 /** Time on the forward timeline when the lift ends. */
 export const LIFT_END = SEQUENCE_TIMINGS.liftSeconds;

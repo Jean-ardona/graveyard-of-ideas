@@ -52,7 +52,6 @@ export const COLORS = {
   moonPool: '#9db4e0',
   star: '#dfe8ff',
   mound: '#1f2838',
-  tombRecess: '#06080d',
   bookCover: '#2d3f63',
   bookSpine: '#1f2c47',
   engraving: '#2b3347',

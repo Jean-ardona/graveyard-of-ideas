@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo } from 'react';
 import type { BookAssets } from './bookAssets';
 import { registerBookHandle } from './bookHandles';
-import { createBookModel } from './bookModel';
+import { applyRestPose, createBookModel } from './bookModel';
 
 interface BookProps {
   /** Id of the project this book holds. */
@@ -10,12 +10,16 @@ interface BookProps {
 }
 
 /**
- * A closed book: a hinged front board, a spine, a page block and a stack of leaves, registered
+ * A closed book lying flat on its parent surface: a hinged front board, a spine, a page block and a stack of leaves, registered
  * under the project id so later effects (the page turns, the ember dissolve) can reach each part.
  * Geometry, materials and texture are shared; only the lightweight objects are per book.
  */
 function Book({ id, assets }: BookProps) {
-  const model = useMemo(() => createBookModel(assets), [assets]);
+  const model = useMemo(() => {
+    const built = createBookModel(assets);
+    applyRestPose(built.root);
+    return built;
+  }, [assets]);
 
   useEffect(
     () => registerBookHandle({ id, root: model.root, parts: model.parts, leaves: model.leaves }),

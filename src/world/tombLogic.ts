@@ -99,13 +99,21 @@ export function slabOffset(progress: number): number {
   return Math.min(1, Math.max(0, progress)) * SLAB_TRAVEL;
 }
 
-/** Walking obstacle of a tomb, from its footprint. */
-export function tombCollider(descriptor: TombDescriptor): BoxCollider {
+/**
+ * Walking obstacle of a tomb, from its footprint. `frontReach` is how far in front of the tomb
+ * center the footprint extends (the plinth that carries the book); it must not be less than
+ * the tomb's own half depth.
+ */
+export function tombCollider(descriptor: TombDescriptor, frontReach: number = TOMB_HALF_DEPTH): BoxCollider {
+  const front = Math.max(frontReach, TOMB_HALF_DEPTH);
+  const halfDepth = (front + TOMB_HALF_DEPTH) / 2;
+  // The box center moves toward the front by the part of the footprint that sticks out.
+  const shift = front - halfDepth;
   return {
-    x: descriptor.x,
-    z: descriptor.z,
+    x: descriptor.x + Math.sin(descriptor.rotation) * shift,
+    z: descriptor.z + Math.cos(descriptor.rotation) * shift,
     halfWidth: TOMB_HALF_WIDTH,
-    halfDepth: TOMB_HALF_DEPTH,
+    halfDepth,
     rotation: descriptor.rotation,
   };
 }

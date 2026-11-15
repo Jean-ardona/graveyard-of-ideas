@@ -4,7 +4,7 @@ import { createReadingMachine } from '../book/readingMachine';
 import type { ReadingMachine } from '../book/readingMachine';
 import { isIdle } from '../book/pageTurn';
 import type { TurnDirection } from '../book/pageTurn';
-import { APPROACH_END, LIFT_END, MAX_FRAME_DELTA, TOTAL_SECONDS } from '../book/bookTimings';
+import { APPROACH_END, LIFT_END, MAX_FRAME_DELTA, PAGE_TURN, TOTAL_SECONDS } from '../book/bookTimings';
 import { canOpenBook, uiModeForPhase } from '../interaction/uiMode';
 import type { OpenGuardInput, UiMode } from '../interaction/uiMode';
 
@@ -92,7 +92,8 @@ function tickBy(machine: ReadingMachine, total: number, chunk: number): void {
 }
 
 function tickUntil(machine: ReadingMachine, done: () => boolean, dts: number[]): void {
-  for (const dt of [...dts, ...new Array<number>(60).fill(MAX_FRAME_DELTA)]) {
+  const settleFrames = Math.ceil((TOTAL_SECONDS + PAGE_TURN.settleSeconds) / MAX_FRAME_DELTA) + 2;
+  for (const dt of [...dts, ...new Array<number>(settleFrames).fill(MAX_FRAME_DELTA)]) {
     if (done()) return;
     machine.tick(dt);
   }
@@ -163,8 +164,8 @@ describe('reading machine properties', () => {
   it('Feature: graveyard-core, Property 8: Frame-rate independence', () => {
     fc.assert(
       fc.property(
-        fc.double({ min: 0, max: 3, noNaN: true }),
-        fc.double({ min: 0, max: 0.6, noNaN: true }),
+        fc.double({ min: 0, max: TOTAL_SECONDS + 0.5, noNaN: true }),
+        fc.double({ min: 0, max: PAGE_TURN.settleSeconds * 2, noNaN: true }),
         fc.double({ min: 0.002, max: MAX_FRAME_DELTA, noNaN: true }),
         fc.double({ min: 0.002, max: MAX_FRAME_DELTA, noNaN: true }),
         (openSeconds, turnSeconds, chunkA, chunkB) => {
@@ -184,7 +185,7 @@ describe('reading machine properties', () => {
           d.turnPage('next');
           tickBy(c, turnSeconds, chunkA);
           tickBy(d, turnSeconds, chunkB);
-          if (Math.abs(turnSeconds - 0.3) < 1e-6) return;
+          if (Math.abs(turnSeconds - PAGE_TURN.settleSeconds) < 1e-6) return;
           expect(c.pages.index).toBe(d.pages.index);
           expect(c.pages.status).toBe(d.pages.status);
           expect(c.pages.progress).toBeCloseTo(d.pages.progress, 6);
@@ -306,7 +307,7 @@ describe('reading machine examples', () => {
     expect(calls).toBe(3);
     const version = machine.version();
     unsubscribe();
-    tickBy(machine, 0.4, 0.05);
+    tickBy(machine, PAGE_TURN.settleSeconds + 0.1, MAX_FRAME_DELTA);
     expect(machine.pages.index).toBe(1);
     expect(calls).toBe(3);
     expect(machine.version()).toBe(version + 1);
@@ -315,10 +316,10 @@ describe('reading machine examples', () => {
   it('returns to page 0 after a full open, turn, close cycle', () => {
     const machine = opened();
     machine.turnPage('next');
-    tickBy(machine, 0.4, 0.05);
+    tickBy(machine, PAGE_TURN.settleSeconds + 0.1, MAX_FRAME_DELTA);
     expect(machine.pages.index).toBe(1);
     machine.close();
-    tickBy(machine, TOTAL_SECONDS + 0.1, 0.05);
+    tickBy(machine, TOTAL_SECONDS + 0.1, MAX_FRAME_DELTA);
     expect(machine.phase()).toBe('closed');
     expect(machine.pages.index).toBe(0);
   });

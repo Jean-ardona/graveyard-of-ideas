@@ -70,9 +70,9 @@ The closed book that already lies on the tomb base (task 5.2) is the interactive
 Superseded wording: Requirement 2.1 (slab slides open, book raised from the cavity) and 2.5 (book lowered into the cavity, slab closed) describe the old flow. The slab and cavity stay in the tomb for the burial cinematic (task 6.2). See "Open points".
 
 Sequence (forward):
-1. The book lifts off the base, about 0.6 s, ease-out.
-2. It moves toward the player and turns to face the camera, about 0.8 s.
-3. The cover opens, pivoting on the spine, about 0.8 s.
+1. The book lifts off the base, about 1.0 s, ease-out.
+2. It moves toward the player and turns to face the camera, about 1.2 s.
+3. The cover opens, pivoting on the spine, about 1.2 s.
 4. The first page shows the project name in an ancient font, then the page content fades in.
 5. Escape or E plays the same sequence in reverse; the book returns to the base.
 
@@ -116,7 +116,7 @@ interface SequenceProgress { lift: number; approach: number; cover: number }    
 
 ### Timings (data constants, `bookTimings.ts`)
 ```ts
-SEQUENCE_TIMINGS = { liftSeconds: 0.6, approachSeconds: 0.8, coverSeconds: 0.8 }   // TOTAL = 2.2
+SEQUENCE_TIMINGS = { liftSeconds: 1.0, approachSeconds: 1.2, coverSeconds: 1.2 }   // TOTAL = 3.4
 MAX_FRAME_DELTA = 0.05          // same clamp as the player controller
 LIFT_HEIGHT = 0.15              // meters above the base pose
 READING_POSE = { distance: 0.55, down: 0.04 }   // in camera space, tuned on the target machine
@@ -124,15 +124,15 @@ COVER_OPEN_ANGLE = 3.05         // rad, about 175 degrees
 PAGE_TURN = { deadzonePx: 4, fullTurnRatio: 0.8, commitThreshold: 0.5, settleSeconds: 0.3 }
 PAGE_FADE_SECONDS = 0.15        // CSS opacity of the page content
 ```
-Phase boundaries from `t`: lifting `t < 0.6`, approaching `t < 1.4`, coverOpening `t < 2.2`, open at `t = 2.2`. Easing: lift ease-out cubic; approach and cover ease-in-out cubic. Reduced animations (`prefs.reducedMotion`) dispatch `SKIP` right after `OPEN` or `CLOSE`.
+Phase boundaries from `t`: lifting `t < 1.0`, approaching `t < 2.2`, coverOpening `t < 3.4`, open at `t = 3.4`. Easing: lift ease-out cubic; approach and cover ease-in-out cubic. Reduced animations (`prefs.reducedMotion`) dispatch `SKIP` right after `OPEN` or `CLOSE`.
 
 ### Sequence transition table
 | State | OPEN | CLOSE | SKIP | Tick (dt) |
 |---|---|---|---|---|
 | closed | to lifting, if guard passes | ignored | ignored | nothing |
-| lifting | ignored | to closing (t kept) | to open | `t += dt`; at `t >= 0.6` to approaching |
-| approaching | ignored | to closing (t kept) | to open | at `t >= 1.4` to coverOpening |
-| coverOpening | ignored | to closing (t kept) | to open | at `t >= 2.2` to open, `t = 2.2` |
+| lifting | ignored | to closing (t kept) | to open | `t += dt`; at `t >= 1.0` to approaching |
+| approaching | ignored | to closing (t kept) | to open | at `t >= 2.2` to coverOpening |
+| coverOpening | ignored | to closing (t kept) | to open | at `t >= 3.4` to open, `t = 3.4` |
 | open | ignored | to closing if pages idle, else `closePending = true` | ignored | if `closePending` and pages idle, to closing |
 | closing | ignored | ignored | to closed | `t -= dt`; at `t <= 0` to closed, `t = 0` |
 
@@ -150,7 +150,7 @@ Leftover time at a boundary is discarded. Entering `closed` resets the page mode
 Walking and look are locked from the moment OPEN is accepted until the book is `closed` again. Escape or E reverses. Reasons:
 - The player often still holds W when pressing E. Auto-close on movement would close the book at once.
 - The book flies to a pose captured from the camera when OPEN is accepted. A moving camera would need per-frame retargeting, which costs work on a weak GPU and makes the book swim.
-- Req 2.2 asks for a stable camera and book. The lock lasts 2.2 s at most and is always reversible.
+- Req 2.2 asks for a stable camera and book. The lock lasts 3.4 s at most and is always reversible.
 
 `inputLocked` is a separate flag on `PlayerController`. It zeroes walking and look and releases held keys, but does not touch the pointer mode. The existing `enabled` flag cannot be used, because disabling it also frees the pointer (`modeOnSuspend`), which would break I3. The "E - Open" prompt is hidden while `inputLocked` is true. In click-and-drag fallback mode, look-drag is off while locked, so page dragging does not turn the view.
 

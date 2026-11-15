@@ -1,28 +1,23 @@
 import { memo, useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { Book, BOOK_SIZE, openBook } from '../book';
+import { Book, BOOK_REST_FOOTPRINT, openBook } from '../book';
 import type { BookAssets } from '../book';
 import { registerActionHandler, registerCollider, registerInteractable } from '../interaction';
 import { createEngravingTexture } from './engravingTexture';
 import { useDisposable } from './geometryUtils';
 import { terrainHeight } from './terrain';
-import { CAVITY } from './tombAssets';
+import { PLINTH } from './tombAssets';
 import type { TombAssets } from './tombAssets';
 import { registerTombHandle } from './tombHandles';
 import { sameTomb, slabOffset, tombCollider } from './tombLogic';
 import type { TombDescriptor } from './tombLogic';
 
 const PROMPT_HEIGHT = 0.9;
-/** The prompt point is this far in front of the tomb center. */
-const PROMPT_FRONT = 0.8;
+/** The prompt point is this far in front of the tomb center: the middle of the resting book. */
+const PROMPT_FRONT = PLINTH.bookZ - BOOK_REST_FOOTPRINT.length / 2;
 const REACH = 2.6;
-/** The book stands on the cavity floor, just clear of the recess wall and behind the closed slab. */
-const BOOK_CLEARANCE = 0.005;
-const BOOK_POSITION: [number, number, number] = [
-  0,
-  CAVITY.floorY + BOOK_CLEARANCE,
-  CAVITY.frontZ + BOOK_SIZE.depth / 2 + BOOK_CLEARANCE,
-];
+/** The book lies on top of the plinth; its origin is the bottom edge, the book extends toward the tomb. */
+const BOOK_POSITION: [number, number, number] = [0, PLINTH.topY, PLINTH.bookZ];
 
 interface TombProps {
   descriptor: TombDescriptor;
@@ -31,8 +26,8 @@ interface TombProps {
 }
 
 /**
- * One tomb: stone body with a sliding front slab over a dark recess holding the project's
- * book, and the name engraved on its face. Geometry and materials (stone and book) are shared;
+ * One tomb: stone body with a sliding front slab, a low plinth in front with the project's
+ * book lying on it, and the name engraved on its face. Geometry and materials (stone and book) are shared;
  * only the name texture and its material belong to this tomb and are disposed with it.
  */
 function Tomb({ descriptor, assets, bookAssets }: TombProps) {
@@ -63,7 +58,7 @@ function Tomb({ descriptor, assets, bookAssets }: TombProps) {
     });
     // E starts the book sequence: the book lifts, comes to the player and opens.
     const removeHandler = registerActionHandler(action, () => openBook(id));
-    const removeCollider = registerCollider(tombCollider(descriptor));
+    const removeCollider = registerCollider(tombCollider(descriptor, PLINTH.backZ + PLINTH.depth));
     const removeHandle = registerTombHandle({
       id,
       setOpenProgress(progress) {
@@ -86,7 +81,7 @@ function Tomb({ descriptor, assets, bookAssets }: TombProps) {
     <group position={[x, y, z]} rotation={[0, rotation, 0]}>
       <group rotation={[0, 0, lean]}>
         <mesh geometry={assets.bodies[shape]} material={assets.stone} />
-        <mesh geometry={assets.recess} material={assets.recessDark} />
+        <mesh geometry={assets.plinth} material={assets.stone} />
         <group position={BOOK_POSITION}>
           <Book id={id} assets={bookAssets} />
         </group>
