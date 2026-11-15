@@ -19,9 +19,13 @@ function skipWhenReducedMotion(): void {
   if (appStore.getState().data.prefs.reducedMotion) readingMachine.skip();
 }
 
-/** Starts the opening sequence for a resting project. Ignored if the guard refuses it. */
-export function openBook(projectId: string): void {
+/**
+ * Starts the opening sequence for a resting project. Ignored if the guard refuses it,
+ * including when the player is not in front of the tomb.
+ */
+export function openBook(projectId: string, playerInFront: boolean): void {
   const guard = {
+    playerInFront,
     mode: readingMachine.uiMode(),
     pointerAllowsMovement: allowsMovement(getPointerMode()),
     projectResting: appStore.getState().data.projects.some((p) => p.id === projectId && p.status === 'resting'),

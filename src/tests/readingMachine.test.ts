@@ -9,7 +9,12 @@ import { canOpenBook, uiModeForPhase } from '../interaction/uiMode';
 import type { OpenGuardInput, UiMode } from '../interaction/uiMode';
 
 const RUNS = { numRuns: 200 };
-const GOOD: OpenGuardInput = { mode: 'exploring', pointerAllowsMovement: true, projectResting: true };
+const GOOD: OpenGuardInput = {
+  mode: 'exploring',
+  pointerAllowsMovement: true,
+  projectResting: true,
+  playerInFront: true,
+};
 const MODES: UiMode[] = ['exploring', 'openingGrave', 'reading', 'closingGrave', 'burying', 'resurrecting', 'paused'];
 
 const dtArb = fc.oneof(
@@ -21,6 +26,7 @@ const guardArb: fc.Arbitrary<OpenGuardInput> = fc.record({
   mode: fc.constantFrom(...MODES),
   pointerAllowsMovement: fc.boolean(),
   projectResting: fc.boolean(),
+  playerInFront: fc.boolean(),
 });
 const directionArb = fc.constantFrom<TurnDirection>('next', 'prev');
 
@@ -235,6 +241,13 @@ describe('OPEN guard', () => {
 
   it('refuses when the pointer does not allow movement', () => {
     expect(canOpenBook({ ...GOOD, pointerAllowsMovement: false })).toBe(false);
+  });
+
+  it('refuses when the player is not in front of the tomb', () => {
+    expect(canOpenBook({ ...GOOD, playerInFront: false })).toBe(false);
+    const machine = createReadingMachine();
+    expect(machine.open({ ...GOOD, playerInFront: false })).toBe(false);
+    expect(machine.phase()).toBe('closed');
   });
 
   it('refuses when the project does not rest', () => {

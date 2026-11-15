@@ -2,7 +2,13 @@ import { memo, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { Book, BOOK_REST_FOOTPRINT, openBook } from '../book';
 import type { BookAssets } from '../book';
-import { registerActionHandler, registerCollider, registerInteractable } from '../interaction';
+import {
+  isInFrontOfTomb,
+  playerSession,
+  registerActionHandler,
+  registerCollider,
+  registerInteractable,
+} from '../interaction';
 import { createEngravingTexture } from './engravingTexture';
 import { useDisposable } from './geometryUtils';
 import { terrainHeight } from './terrain';
@@ -44,7 +50,10 @@ function Tomb({ descriptor, assets, bookAssets }: TombProps) {
 
   useEffect(() => {
     const action = `open-tomb:${id}`;
+    // The tomb faces local +z, which is (sin, cos) of its rotation on the ground.
+    const tomb = { x, z, facing: { x: Math.sin(rotation), z: Math.cos(rotation) } };
     const removeInteractable = registerInteractable({
+      tomb,
       id: `tomb-${id}`,
       position: {
         x: x + Math.sin(rotation) * PROMPT_FRONT,
@@ -57,7 +66,9 @@ function Tomb({ descriptor, assets, bookAssets }: TombProps) {
       enabled: true,
     });
     // E starts the book sequence: the book lifts, comes to the player and opens.
-    const removeHandler = registerActionHandler(action, () => openBook(id));
+    const removeHandler = registerActionHandler(action, () =>
+      openBook(id, isInFrontOfTomb(tomb, tomb.facing, playerSession)),
+    );
     const removeCollider = registerCollider(tombCollider(descriptor, PLINTH.backZ + PLINTH.depth));
     const removeHandle = registerTombHandle({
       id,

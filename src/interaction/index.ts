@@ -5,6 +5,8 @@ export { allowsMovement, pointerEdge } from './pointerLock';
 export type { PointerEdge, PointerMode } from './pointerLock';
 export { canOpenBook, canStartCinematic, uiModeForPhase } from './uiMode';
 export type { OpenGuardInput, UiMode } from './uiMode';
+export { isInFrontOfTomb, FRONT_MIN_DOT } from './tombFront';
+export { playerSession } from './playerSession';
 export { registerActionHandler, registerInteractable, useFocused } from './interactionState';
 export { registerCollider } from './colliderRegistry';
 export type { Interactable } from './interactables';

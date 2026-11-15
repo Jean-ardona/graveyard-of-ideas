@@ -77,6 +77,22 @@ describe('selectFocus', () => {
   });
 });
 
+describe('selectFocus with tombs', () => {
+  // Tombs at x = +-2 face -z, toward the player at the origin side of z = -1.
+  const tomb = (id: string, x: number, facingZ: number) =>
+    item(id, x, 0, -1, { tomb: { x, z: -2, facing: { x: 0, z: facingZ } } });
+
+  it('never picks a tomb the player stands behind', () => {
+    expect(selectFocus([tomb('behind', 0, -1)], ORIGIN, AHEAD)).toBeNull();
+  });
+
+  it('still picks a tomb the player is in front of, when another is behind', () => {
+    const items = [tomb('behind', 0, -1), tomb('front', 0.2, 1)];
+    expect(selectFocus(items, ORIGIN, AHEAD)?.id).toBe('front');
+    expect(selectFocus([...items].reverse(), ORIGIN, AHEAD)?.id).toBe('front');
+  });
+});
+
 describe('allowsInteraction', () => {
   it('is true only while looking is active', () => {
     expect(allowsInteraction('locked')).toBe(true);
@@ -111,7 +127,7 @@ describe('opening and closing a book through readingBook', () => {
 
   it('toggles inputLocked exactly with the machine, and keeps only the project id', () => {
     expect(readingMachine.inputLocked()).toBe(false);
-    openBook(id);
+    openBook(id, true);
     expect(readingMachine.phase()).toBe('lifting');
     expect(readingMachine.inputLocked()).toBe(true);
     expect(getReadingProjectId()).toBe(id);
@@ -129,19 +145,19 @@ describe('opening and closing a book through readingBook', () => {
   });
 
   it('ignores a second open while a sequence runs, and unknown projects', () => {
-    openBook('missing');
+    openBook('missing', true);
     expect(readingMachine.phase()).toBe('closed');
     expect(getReadingProjectId()).toBeNull();
-    openBook(id);
+    openBook(id, true);
     readingMachine.tick(0.3);
     const t = readingMachine.sequence.t;
-    openBook(id);
+    openBook(id, true);
     expect(readingMachine.sequence.t).toBe(t);
   });
 
   it('reaches open and closed at once with reduced motion', () => {
     setReducedMotion(true);
-    openBook(id);
+    openBook(id, true);
     expect(readingMachine.phase()).toBe('open');
     closeBook();
     expect(readingMachine.phase()).toBe('closed');

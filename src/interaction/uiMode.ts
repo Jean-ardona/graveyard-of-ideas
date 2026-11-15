@@ -32,9 +32,19 @@ export interface OpenGuardInput {
   mode: UiMode;
   pointerAllowsMovement: boolean;
   projectResting: boolean;
+  /** The player stands on the book's side of the tomb. */
+  playerInFront: boolean;
 }
 
-/** Whether OPEN is accepted: exploring, the pointer allows movement, and the project rests. */
+/**
+ * Whether OPEN is accepted: exploring, the pointer allows movement, the project rests and
+ * the player is in front of the tomb.
+ */
 export function canOpenBook(input: OpenGuardInput): boolean {
-  return canStartCinematic(input.mode) && input.pointerAllowsMovement && input.projectResting;
+  return (
+    canStartCinematic(input.mode) &&
+    input.pointerAllowsMovement &&
+    input.projectResting &&
+    input.playerInFront
+  );
 }

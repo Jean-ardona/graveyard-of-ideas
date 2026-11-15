@@ -1,4 +1,6 @@
 import type { PointerMode } from './pointerLock';
+import { isInFrontOfTomb } from './tombFront';
+import type { GroundPoint } from './tombFront';
 
 export interface Vec3 {
   x: number;
@@ -15,6 +17,11 @@ export interface Interactable {
   label: string;
   action: string;
   enabled: boolean;
+  /**
+   * Set for a tomb: where it stands and the unit direction it faces on the ground. The
+   * interactable is a target only while the player is in front of it.
+   */
+  tomb?: GroundPoint & { facing: GroundPoint };
 }
 
 /** The view cone is this many degrees either side of the camera forward direction. */
@@ -65,6 +72,7 @@ export function selectFocus(
     if (!item || !item.enabled) continue;
     const d2 = distanceSq(origin, item.position);
     if (d2 > item.radius * item.radius || d2 > bestDistance) continue;
+    if (item.tomb && !isInFrontOfTomb(item.tomb, item.tomb.facing, origin)) continue;
     const cos = cosAngleTo(origin, forward, item.position);
     if (cos < cosHalfAngle) continue;
     const better =
