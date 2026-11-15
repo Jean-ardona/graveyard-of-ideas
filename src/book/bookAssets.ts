@@ -1,10 +1,13 @@
 import * as THREE from 'three';
 import { COLORS } from '../world/config';
 import { mergeParts, placed } from '../world/geometryUtils';
+import { createCoverBorderTexture, createCoverMaterial, createPageEdgeMaterial } from './bookLook';
 
 /**
- * Geometry and materials shared by every book. Created once, disposed once.
+ * Geometry, materials and texture shared by every book. Created once, disposed once.
  * The book stands upright, its origin at the bottom center; the cover faces +z.
+ * The front board and the leaves are built around the spine axis, so a pivot placed on
+ * that axis turns them about the spine.
  */
 
 export const BOOK_SIZE = { width: 0.3, height: 0.4, depth: 0.07 } as const;
@@ -21,52 +24,82 @@ const MIDDLE_Y = BOOK_SIZE.height / 2;
 /** The page block sits against the spine and leaves a margin on the open side. */
 const INNER_CENTER_X = -HALF_WIDTH + SPINE_WIDTH + INNER_WIDTH / 2;
 
+export const LEAF_COUNT = 3;
+/** The leaves lie against the front board; page 1 is the outermost one. */
+const BLOCK_DEPTH = INNER_DEPTH - LEAF_COUNT * LEAF_DEPTH;
+
+/** Vertical axis through the middle of the spine: the hinge of the front board and the leaves. */
+const HINGE_X = -HALF_WIDTH + SPINE_WIDTH / 2;
+const FRONT_BOARD_Z = HALF_DEPTH - BOARD / 2;
+
+/** Pivot positions inside the book, for the model that assembles the parts. */
+export const BOOK_PIVOTS = {
+  frontBoard: [HINGE_X, 0, FRONT_BOARD_Z],
+  leaves: Array.from({ length: LEAF_COUNT }, (_, j): [number, number, number] => [
+    HINGE_X,
+    0,
+    INNER_DEPTH / 2 - LEAF_DEPTH / 2 - j * LEAF_DEPTH,
+  ]),
+} as const;
+
+/** A box whose center is at (x, y, z) in the frame of its pivot. */
 function box(w: number, h: number, d: number, x: number, y: number, z: number): THREE.BufferGeometry {
   return placed(new THREE.BoxGeometry(w, h, d), [x, y, z]);
 }
 
-/** The four parts of a book, each a separate mesh so a later effect can treat them one by one. */
+/** The four parts of a book. The leaf geometry and material are used by all three leaves. */
 export interface BookAssets {
-  cover: THREE.BufferGeometry;
+  frontBoard: THREE.BufferGeometry;
   spine: THREE.BufferGeometry;
   pageBlock: THREE.BufferGeometry;
-  pages: THREE.BufferGeometry;
+  leaf: THREE.BufferGeometry;
   coverMaterial: THREE.Material;
   spineMaterial: THREE.Material;
   pageBlockMaterial: THREE.Material;
-  pagesMaterial: THREE.Material;
+  leafMaterial: THREE.Material;
+  coverTexture: THREE.Texture;
   dispose(): void;
 }
 
 export function createBookAssets(): BookAssets {
-  const cover = mergeParts([
-    box(BOOK_SIZE.width - SPINE_WIDTH, BOOK_SIZE.height, BOARD, SPINE_WIDTH / 2, MIDDLE_Y, HALF_DEPTH - BOARD / 2),
+  // Front board, in the frame of its hinge: it spans from the spine to the open edge.
+  const frontBoard = box(BOOK_SIZE.width - SPINE_WIDTH, BOOK_SIZE.height, BOARD, HALF_WIDTH, MIDDLE_Y, 0);
+  // The binding: spine and back board in one part.
+  const spine = mergeParts([
+    box(SPINE_WIDTH, BOOK_SIZE.height, BOOK_SIZE.depth, HINGE_X, MIDDLE_Y, 0),
     box(BOOK_SIZE.width - SPINE_WIDTH, BOOK_SIZE.height, BOARD, SPINE_WIDTH / 2, MIDDLE_Y, -HALF_DEPTH + BOARD / 2),
   ]);
-  const spine = box(SPINE_WIDTH, BOOK_SIZE.height, BOOK_SIZE.depth, -HALF_WIDTH + SPINE_WIDTH / 2, MIDDLE_Y, 0);
-  const pageBlock = box(INNER_WIDTH, INNER_HEIGHT, INNER_DEPTH - 2 * LEAF_DEPTH, INNER_CENTER_X, MIDDLE_Y, 0);
-  const pages = mergeParts([
-    box(INNER_WIDTH, INNER_HEIGHT, LEAF_DEPTH, INNER_CENTER_X, MIDDLE_Y, INNER_DEPTH / 2 - LEAF_DEPTH / 2),
-    box(INNER_WIDTH, INNER_HEIGHT, LEAF_DEPTH, INNER_CENTER_X, MIDDLE_Y, -INNER_DEPTH / 2 + LEAF_DEPTH / 2),
-  ]);
+  const pageBlock = box(
+    INNER_WIDTH,
+    INNER_HEIGHT,
+    BLOCK_DEPTH,
+    INNER_CENTER_X,
+    MIDDLE_Y,
+    -INNER_DEPTH / 2 + BLOCK_DEPTH / 2,
+  );
+  // One leaf, in the frame of its hinge.
+  const leaf = box(INNER_WIDTH, INNER_HEIGHT, LEAF_DEPTH, INNER_CENTER_X - HINGE_X, MIDDLE_Y, 0);
 
-  const coverMaterial = new THREE.MeshStandardMaterial({ color: COLORS.bookCover, flatShading: true, roughness: 1 });
+  const coverTexture = createCoverBorderTexture();
+  const coverMaterial = createCoverMaterial(coverTexture);
   const spineMaterial = new THREE.MeshStandardMaterial({ color: COLORS.bookSpine, flatShading: true, roughness: 1 });
-  const pageBlockMaterial = new THREE.MeshStandardMaterial({ color: COLORS.bookPageBlock, roughness: 1 });
-  const pagesMaterial = new THREE.MeshStandardMaterial({ color: COLORS.bookPages, roughness: 1 });
+  const pageBlockMaterial = createPageEdgeMaterial();
+  const leafMaterial = createPageEdgeMaterial();
 
   return {
-    cover,
+    frontBoard,
     spine,
     pageBlock,
-    pages,
+    leaf,
     coverMaterial,
     spineMaterial,
     pageBlockMaterial,
-    pagesMaterial,
+    leafMaterial,
+    coverTexture,
     dispose() {
-      [cover, spine, pageBlock, pages].forEach((geometry) => geometry.dispose());
-      [coverMaterial, spineMaterial, pageBlockMaterial, pagesMaterial].forEach((material) => material.dispose());
+      [frontBoard, spine, pageBlock, leaf].forEach((geometry) => geometry.dispose());
+      [coverMaterial, spineMaterial, pageBlockMaterial, leafMaterial].forEach((material) => material.dispose());
+      coverTexture.dispose();
     },
   };
 }

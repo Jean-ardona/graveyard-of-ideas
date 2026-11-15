@@ -55,8 +55,6 @@ export const COLORS = {
   tombRecess: '#06080d',
   bookCover: '#2d3f63',
   bookSpine: '#1f2c47',
-  bookPageBlock: '#8f9bb3',
-  bookPages: '#b9c3d6',
   engraving: '#2b3347',
   engravingEdge: '#a3adc2',
   /** The only warm tone in the scene. */

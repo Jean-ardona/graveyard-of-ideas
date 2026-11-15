@@ -1,7 +1,7 @@
-import { memo, useEffect, useRef } from 'react';
-import type * as THREE from 'three';
+import { memo, useEffect, useMemo } from 'react';
 import type { BookAssets } from './bookAssets';
 import { registerBookHandle } from './bookHandles';
+import { createBookModel } from './bookModel';
 
 interface BookProps {
   /** Id of the project this book holds. */
@@ -10,40 +10,19 @@ interface BookProps {
 }
 
 /**
- * A closed book. Cover, spine, page block and pages are separate groups, registered under
- * the project id so a later effect (the ember dissolve) can reach each one. Geometry and
- * materials are shared; nothing here is allocated per book.
+ * A closed book: a hinged front board, a spine, a page block and a stack of leaves, registered
+ * under the project id so later effects (the page turns, the ember dissolve) can reach each part.
+ * Geometry, materials and texture are shared; only the lightweight objects are per book.
  */
 function Book({ id, assets }: BookProps) {
-  const cover = useRef<THREE.Group>(null);
-  const spine = useRef<THREE.Group>(null);
-  const pageBlock = useRef<THREE.Group>(null);
-  const pages = useRef<THREE.Group>(null);
+  const model = useMemo(() => createBookModel(assets), [assets]);
 
-  useEffect(() => {
-    if (!cover.current || !spine.current || !pageBlock.current || !pages.current) return undefined;
-    return registerBookHandle({
-      id,
-      parts: { cover: cover.current, spine: spine.current, pageBlock: pageBlock.current, pages: pages.current },
-    });
-  }, [id]);
-
-  return (
-    <group>
-      <group ref={cover}>
-        <mesh geometry={assets.cover} material={assets.coverMaterial} />
-      </group>
-      <group ref={spine}>
-        <mesh geometry={assets.spine} material={assets.spineMaterial} />
-      </group>
-      <group ref={pageBlock}>
-        <mesh geometry={assets.pageBlock} material={assets.pageBlockMaterial} />
-      </group>
-      <group ref={pages}>
-        <mesh geometry={assets.pages} material={assets.pagesMaterial} />
-      </group>
-    </group>
+  useEffect(
+    () => registerBookHandle({ id, root: model.root, parts: model.parts, leaves: model.leaves }),
+    [id, model],
   );
+
+  return <primitive object={model.root} />;
 }
 
 export default memo(Book);

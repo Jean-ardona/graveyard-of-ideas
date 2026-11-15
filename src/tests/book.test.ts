@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import fc from 'fast-check';
+import * as THREE from 'three';
 import {
   EDITABLE_FIELDS,
   buryNewProject,
@@ -10,7 +11,9 @@ import {
 } from '../domain';
 import type { Project } from '../domain';
 import { BOOK_PARTS } from '../book/bookParts';
-import { createBookAssets } from '../book/bookAssets';
+import { BOOK_SIZE, createBookAssets } from '../book/bookAssets';
+import { getBookHandle, registerBookHandle } from '../book/bookHandles';
+import { createBookModel } from '../book/bookModel';
 import { emptyData } from '../store/persistence';
 import { createGraveyardStore } from '../store';
 
@@ -109,12 +112,118 @@ describe('store editProject', () => {
   });
 });
 
+function meshesOf(object: THREE.Object3D): THREE.Mesh[] {
+  const meshes: THREE.Mesh[] = [];
+  object.traverse((child) => {
+    if (child instanceof THREE.Mesh) meshes.push(child);
+  });
+  return meshes;
+}
+
+function worldBox(object: THREE.Object3D): THREE.Box3 {
+  object.updateWorldMatrix(true, true);
+  return new THREE.Box3().setFromObject(object);
+}
+
 describe('book assets', () => {
-  it('builds four separate parts and disposes them', () => {
+  it('builds four separate geometries with content', () => {
     const assets = createBookAssets();
-    const parts = [assets.cover, assets.spine, assets.pageBlock, assets.pages];
-    expect(new Set(parts).size).toBe(4);
-    parts.forEach((geometry) => expect(geometry.getAttribute('position').count).toBeGreaterThan(0));
-    expect(() => assets.dispose()).not.toThrow();
+    const geometries = [assets.frontBoard, assets.spine, assets.pageBlock, assets.leaf];
+    expect(new Set(geometries).size).toBe(4);
+    geometries.forEach((geometry) => expect(geometry.getAttribute('position').count).toBeGreaterThan(0));
+    assets.dispose();
+  });
+
+  it('releases every geometry, material and the texture exactly once', () => {
+    const assets = createBookAssets();
+    const resources = [
+      assets.frontBoard,
+      assets.spine,
+      assets.pageBlock,
+      assets.leaf,
+      assets.coverMaterial,
+      assets.spineMaterial,
+      assets.pageBlockMaterial,
+      assets.leafMaterial,
+      assets.coverTexture,
+    ];
+    const disposed = resources.map((resource) => {
+      const listener = vi.fn();
+      resource.addEventListener('dispose', listener);
+      return listener;
+    });
+    assets.dispose();
+    disposed.forEach((listener) => expect(listener).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('book model', () => {
+  const assets = createBookAssets();
+  afterAll(() => assets.dispose());
+
+  it('has four separate parts, each holding its own meshes, and three leaves', () => {
+    const model = createBookModel(assets);
+    const { cover, spine, pageBlock, pages } = model.parts;
+    expect(new Set([cover, spine, pageBlock, pages]).size).toBe(4);
+    expect([cover, spine, pageBlock].map((part) => meshesOf(part).length)).toEqual([1, 1, 1]);
+    expect(meshesOf(pages)).toHaveLength(3);
+    expect(model.leaves).toHaveLength(3);
+    expect(meshesOf(model.root)).toHaveLength(6);
+  });
+
+  it('shares one geometry and one material between the three leaves and between books', () => {
+    const first = createBookModel(assets);
+    const second = createBookModel(assets);
+    const leafMeshes = meshesOf(first.parts.pages);
+    expect(new Set(leafMeshes.map((mesh) => mesh.geometry)).size).toBe(1);
+    expect(new Set(leafMeshes.map((mesh) => mesh.material)).size).toBe(1);
+    const geometries = new Set([...meshesOf(first.root), ...meshesOf(second.root)].map((mesh) => mesh.geometry));
+    expect(geometries.size).toBe(4);
+    expect(meshesOf(first.root).every((mesh, i) => mesh.material === meshesOf(second.root)[i]!.material)).toBe(true);
+  });
+
+  it('uses the cover texture on the front board only', () => {
+    const model = createBookModel(assets);
+    const withMap = meshesOf(model.root).filter(
+      (mesh) => (mesh.material as THREE.MeshStandardMaterial).map === assets.coverTexture,
+    );
+    expect(withMap).toEqual(meshesOf(model.parts.cover));
+  });
+
+  it('sits flush with the leaf stack at angle 0 and turns about the spine axis', () => {
+    const model = createBookModel(assets);
+    const { cover, pages } = model.parts;
+    expect(worldBox(cover).min.z).toBeCloseTo(worldBox(pages).max.z, 6);
+    expect(worldBox(cover).max.z).toBeCloseTo(BOOK_SIZE.depth / 2, 6);
+
+    const spineAxisX = cover.position.x;
+    const closed = worldBox(cover);
+    cover.rotation.y = -Math.PI / 2;
+    const open = worldBox(cover);
+    // The free edge swings out toward +z while the hinge stays on the spine axis.
+    expect(open.max.z).toBeGreaterThan(closed.max.z + 0.2);
+    // Half a board thickness (0.006) either side of the axis, nothing more.
+    expect(Math.abs(open.min.x - spineAxisX)).toBeLessThanOrEqual(0.0061);
+    expect(Math.abs(open.max.x - spineAxisX)).toBeLessThanOrEqual(0.0061);
+    expect(cover.position.x).toBe(spineAxisX);
+  });
+
+  it('adds no light and no shadow flag', () => {
+    const model = createBookModel(assets);
+    model.root.traverse((object) => {
+      expect(object).not.toBeInstanceOf(THREE.Light);
+      expect(object.castShadow).toBe(false);
+      expect(object.receiveShadow).toBe(false);
+    });
+  });
+
+  it('is reachable by project id through its handle', () => {
+    const model = createBookModel(assets);
+    const remove = registerBookHandle({ id: 'p1', root: model.root, parts: model.parts, leaves: model.leaves });
+    const handle = getBookHandle('p1');
+    expect(handle?.root).toBe(model.root);
+    expect(handle?.leaves).toHaveLength(3);
+    remove();
+    expect(getBookHandle('p1')).toBeUndefined();
   });
 });

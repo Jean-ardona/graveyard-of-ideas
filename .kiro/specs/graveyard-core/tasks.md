@@ -45,7 +45,7 @@ Build Graveyard of Ideas in layers: pure domain logic first (cheap, GPU-free, pr
       - Existing tests still pass; `tsc` strict has no errors.
     - _Requirements: 2.1, 2.2, 2.4, 2.5, 2.6, 8.3, 9.1, 9.2_
 
-  - [ ] 5.3.2 Book model rework and visibility look
+  - [x] 5.3.2 Book model rework and visibility look
     - Scope: hinged front board (pivot on the spine) and a shared leaf stack of three leaves sharing one geometry and one material. The four parts stay separate meshes so task 7.2 can dissolve each. Add `bookLook` with the pale blue-gray page-edge band, a small shared procedural cover-border texture (about 128 by 128) used as `map` on the front board only, and a low emissive rim on page-edge and cover-border materials. No amber, no new lights, no extra shadow casting. Materials and texture are created in `createBookAssets` and released in `dispose()`. The handle also exposes `root` and `leaves`. Book looks the same as before when closed apart from the new look.
     - Files: `src/book/Book.tsx`, `bookAssets.ts`, `bookHandles.ts`, `bookParts.ts` (only if needed), new `bookLook.ts`, `src/tests/bookLook.test.ts`, `src/tests/book.test.ts` (adjust).
     - Requirements: 2.3, 8.2, 9.3
