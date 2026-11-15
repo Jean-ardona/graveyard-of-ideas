@@ -5,7 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Graveyard of Ideas</title>
     <style>
+      @font-face {
+        font-family: 'IM Fell English';
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url('/fonts/im-fell-english/IMFeENrm28P.ttf') format('truetype');
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC;
+      }
       *, *::before, *::after { box-sizing: border-box; }
+      @keyframes book-page-fade-in { from { opacity: 0; } to { opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) { [data-testid='book-page-content'] { animation: none !important; } }
+      .book-page-surface { cursor: grab; user-select: none; -webkit-user-select: none; }
+      .book-page-surface[data-dragging='true'], .book-page-surface[data-dragging='true'] * { cursor: grabbing; }
+      .book-page-surface input, .book-page-surface textarea { cursor: text; user-select: text; -webkit-user-select: text; }
+      .book-page-surface select, .book-page-surface button:not(:disabled) { cursor: pointer; }
       html, body, #root { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0a0a0f; }
     </style>
   </head>

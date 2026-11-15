@@ -1,4 +1,4 @@
-import BookPages from './BookPages';
+import BookPageOverlay from './BookPageOverlay';
 import { useReadingProject } from './readingBook';
 import { useReadingPhase } from './useReadingPhase';
 
@@ -6,5 +6,5 @@ import { useReadingPhase } from './useReadingPhase';
 export default function BookReader() {
   const project = useReadingProject();
   const phase = useReadingPhase();
-  return project && phase === 'open' ? <BookPages key={project.id} project={project} /> : null;
+  return project && phase === 'open' ? <BookPageOverlay key={project.id} project={project} /> : null;
 }

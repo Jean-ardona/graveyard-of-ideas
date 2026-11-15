@@ -30,7 +30,7 @@ Build Graveyard of Ideas in layers: pure domain logic first (cheap, GPU-free, pr
   - [x] 5.1 Tomb with slab and cavity, rendered from resting projects by slot. _Requirements: 2.1_
   - [x] 5.2 3D book model with embedded HTML pages and four parts, autosaved edits. _Requirements: 2.3, 2.4_
   - [ ] 5.3 UI state machine; open/close sequences; reading mode; Escape handling. _Requirements: 2, 9_
-    Design: "Book interaction (task 5.3)" in design.md. Split into six sub-tasks, each one Kiro session and one commit, run in order. Sub-tasks are never marked optional because each one carries its own tests.
+    Design: "Book interaction (task 5.3)" in design.md. Split into nine sub-tasks (5.3.1 to 5.3.9), each one Kiro session and one commit, run in order. Sub-tasks are never marked optional because each one carries its own tests.
 
   - [x] 5.3.1 Pure core and properties (no React, no Three.js, no DOM, no timers)
     - Scope: create `bookTimings`, `bookSequence`, `pageTurn`, `readingMachine`, `readingKeys`, `bookPageLayout` and `uiMode`, with the constants, transition table, invariants I1-I6 and allocation rule from the design (state records created once and mutated in place). `readingMachine` exposes `subscribe` for discrete changes and derived selectors (`pointerLockReleased`, `inputLocked`, UI mode). Add the pure helper `pointerEdge(prev, next)` (place it in `src/interaction/pointerLock.ts` as a new export only; do not change lock behavior yet).
@@ -72,7 +72,7 @@ Build Graveyard of Ideas in layers: pure domain logic first (cheap, GPU-free, pr
       - The pages still show through the old tab panel until 5.3.5 and remain usable once open.
     - _Requirements: 1.2.2, 2.1, 2.2, 2.5, 2.6, 8.3, 9.1, 9.2_
 
-  - [ ] 5.3.4 Local fonts
+  - [x] 5.3.4 Local fonts
     - Scope: ship local OFL font files (IM Fell English recommended; Cinzel Decorative or UnifrakturCook as alternatives; ask the user which one if the first choice cannot be downloaded) in `public/fonts/<family>/` with `OFL.txt`. Declare `@font-face` with `font-display: swap` and Latin and Latin-1 `unicode-range`. Add `bookFonts.ts` with the family constant, the fallback stack `'IM Fell English', 'Palatino Linotype', Palatino, Georgia, serif` and `ensureBookFont()` (one `document.fonts.load` call, never blocks, silent on failure). No CDN and no remote URL. Check the Reserved Font Name clause before any subsetting; if unsure ship the unmodified files.
     - Files: `public/fonts/<family>/*.woff2`, `public/fonts/<family>/OFL.txt`, `src/book/bookFonts.ts`, global CSS location already used by the app (or `index.html`), `docs/ASSETS.md`, `src/tests/bookFonts.test.ts`.
     - Requirements: 2.3, 8.2
@@ -83,7 +83,7 @@ Build Graveyard of Ideas in layers: pure domain logic first (cheap, GPU-free, pr
       - No console output on load failure.
     - _Requirements: 2.3, 8.2_
 
-  - [ ] 5.3.5 Pages overlay and page-turning UI
+  - [x] 5.3.5 Pages overlay and page-turning UI
     - Scope: `BookPageOverlay` replaces the tab panel of `BookPages.tsx`. Three pages from `bookPageLayout`: page 1 title in the ancient font plus burial date; page 2 reason and idea (editable); page 3 next action (editable) and the resurrection button, disabled until task 7 supplies a handler. Extract `FieldEditor` unchanged (autosave via `editProject`). Mouse drag turns pages with `grab` on hover and `grabbing` while dragging (`data-dragging`); arrow keys turn pages outside typing targets; leaf rotation in the driver (`leafAngle * cover`, at most two leaves written, only when changed); page content hidden (opacity 0, no pointer events) while a turn is not idle and fades in after. Close button dispatches CLOSE. Pointer is released when open and requested again on close. Page rectangle projected once on reaching `open` and on window resize.
     - Files: new `src/book/BookPageOverlay.tsx`, `FieldEditor.tsx`; `src/book/BookPages.tsx` (tab panel removed), `BookSequenceDriver.tsx` (leaf angles), `useReadingInput.ts` (drag, cancel on `pointercancel` and blur, `setPointerCapture`), `src/book/index.ts`, CSS for cursors, `src/tests/bookOverlay.test.tsx` (one render).
     - Requirements: 2.2, 2.3, 2.4, 2.6
@@ -98,22 +98,78 @@ Build Graveyard of Ideas in layers: pure domain logic first (cheap, GPU-free, pr
       - One overlay render test passes; all earlier tests still pass.
     - _Requirements: 2.2, 2.3, 2.4, 2.6_
 
-  - [ ] 5.3.6 Integration and checkpoint
-    - Scope: wire the whole flow and handle edge cases, measure on the target machine, update logs. Handle skip, reload and removed-project cases: a project removed or no longer resting while open dispatches SKIP then CLOSE and requests the pointer; reload always starts `closed`; `paused` freezes ticks and restores the mode. Reduced motion verified end to end. Update `docs/KIRO_LOG.md`. Update `requirements.md` so 2.1, 2.3 and 2.5 describe the new flow (see open items below).
-    - Files: `src/book/readingBook.ts`, `src/book/BookSequenceDriver.tsx`, `src/interaction/uiMode.ts` (only if integration needs it), `src/tests/` (integration tests), `docs/KIRO_LOG.md`, `.kiro/specs/graveyard-core/requirements.md`.
-    - Requirements: 2.1, 2.2, 2.5, 2.6, 8.1, 8.3, 9.1, 9.2, 9.3
+  - [ ] 5.3.6 Curved page turn
+    - Scope: the turning leaf bends like paper; the rigid leaf angle stays the page model. Add the pure module `leafCurl` (`leafCurl(progress, segments, out)`, `leafStrip(phi, segments, width, depth, positions, normals)`, `LEAF_CURL = { segments: 12, tipLag: 0.8 }`) and the pure helper `turningLeafIndex(state)` in `pageTurn.ts`. Add the adapter `leafCurlMesh` (Three.js, no React): one curl geometry per open book (two strips of 13 by 2 vertices, UV and index built once, position and normal attributes `DynamicDrawUsage`, buffers preallocated), created when the book leaves `closed` and disposed when it returns to `closed`, never created for a closed book. At turn start the turning leaf mesh gets the curl geometry (`frustumCulled = false`, hinge rotation 0 while the strip is drawn); at turn end it gets the shared flat geometry and the usual `-renderedLeafAngle` back. Each frame writes in place, only when the leaf fraction changed (last written fraction reset to NaN at turn start), then sets `needsUpdate` on the two attributes. Only the turning leaf is deformed, only while `status !== 'idle'`, `cover === 1` and reduced motion is off. Reduced motion: no curl, the leaf follows the drag rigidly with the flat geometry. No new lights, no amber, no new shadow casting (`castShadow` stays false), shared flat geometry and material untouched. Add the missing example test for the four-part contract through `getBookHandle(id).parts`. Add playbook entries P25-P31.
+    - Files: new `src/book/leafCurl.ts`, `src/book/leafCurlMesh.ts`; `src/book/pageTurn.ts` (`turningLeafIndex` only), `src/book/bookTimings.ts` (`LEAF_CURL`), `src/book/BookSequenceDriver.tsx` (swap and in-place writes), `src/book/index.ts`; tests `src/tests/leafCurl.test.ts`, `src/tests/pageTurn.test.ts` (add `turningLeafIndex`), `src/tests/leafCurlMesh.test.ts`, `src/tests/book.test.ts` (parts through the handle); `docs/KIRO_PLAYBOOK.md` (P25-P31).
+    - Requirements: 2.2, 2.3, 8.2, 8.3, 9.2
     - Acceptance criteria:
+      - `leafCurl.ts` imports no React, Three.js, DOM, timers (source-scan test, same as 5.3.1).
+      - Design properties 16-22 are seven fast-check tests, at least 100 runs, tagged `Feature: graveyard-core, Property N: <title>` for N = 16 to 22: 16 flat at the ends, 17 arc length constant, 18 finite angles and clamped inputs (NaN, infinities), 19 curvature symmetric around the middle, 20 spine angle opens monotonically, 21 shape depends on progress alone (bit-identical after forward, back, forward), 22 only the turning leaf is deformed (`turningLeafIndex`, no curl while cover is below 1 or reduced motion is on). Generators: progress from `fc.double` including NaN, infinities and out-of-range values; segment counts 1 to 64.
+      - Adapter example tests (no GPU): geometry buffers keep the same array identity across writes; nothing is written when the fraction is unchanged; the curl geometry is created when the book leaves `closed` and `dispose` is called on it at `closed`; the shared flat geometry and shared leaf material are restored after each turn; at most one leaf is swapped at a time; `castShadow` stays false; no light is added.
+      - In-place writes with no per-frame allocation: a test over the driver and `leafCurlMesh` source rejects `new ` and array or object literals inside the `useFrame` callback and the per-frame write function.
+      - Reduced motion produces no curl: the flat geometry stays on the leaf during a drag and after release.
+      - Example test (the missing four-part test): after `registerBookHandle`, `getBookHandle(id).parts` has exactly the keys `cover`, `spine`, `pageBlock` and `pages`, four distinct objects, each reachable from `handle.root`, with mesh counts 1, 1, 1 and 3; the same check passes again while a curl is active.
+      - `docs/KIRO_PLAYBOOK.md` has entries P25-P31 for design properties 16-22 (design property N is playbook P(N+9)).
+      - Manual check on the target machine is deferred to 5.3.9; the code only needs to run and pass tests here. All earlier tests pass; `tsc` strict has no errors.
+    - _Requirements: 2.2, 2.3, 8.2, 8.3, 9.2_
+
+  - [ ] 5.3.7 Pure leaf-face and cross-fade modules (no canvas)
+    - Scope: the page text and the cross-fade are defined as pure modules, so that 5.3.8 only has to draw and wire them. Add the pure module `leafFaces` (`leafFaces(project, hasResurrectHandler, measure)` returning `{ front, back }` draw ops per leaf in page-width units, greedy word wrap with an injected `measure`, title clipped to 3 lines with an ellipsis, multiline field limited to 5 lines, `PAGE_METRICS`, `faceKey(ops)`, `textureSize(faceWidth, faceHeight, maxWidth = 512, maxHeight = 768)`) and the pure module `pageCrossfade` (visibility model of the leaf texture and the overlay, `crossfadeSeconds(reducedMotion)`). The model follows this exact ordering, written as the pure model only: (1) turn start, or phase leaving `open`: the leaf texture becomes visible and the overlay becomes hidden, in one step and in that order, so the page is never uncovered; (2) turn end (`idle` again, or `open` reached): the overlay fades in over `PAGE_FADE_SECONDS = 0.15` s, ease-out, with the texture still visible during the fade; (3) only after an overlay-opaque report (opacity 1, or at once when the duration is 0) does the texture become hidden (the front slot goes back to the blank paper); if the report never arrives the texture stays visible under the opaque overlay; (4) reduced motion: `crossfadeSeconds(true) = 0`, overlay fully opaque at once, texture hidden in the same step, no fade. Shared constants, also consumed by the overlay: the `bookLook` leaf colors (`leafPaper` `#c3ccdb`, `leafInk` `#141c30`, field fill `#dde3ee`, field border `#5a6a84`, muted `#3a4766`, button fill `#1d2740`, button text `#c8d8ff`, button border `#3b4d73`), the new `BOOK_BODY_STACK` in `bookFonts.ts` (a pure constant that replaces the bare `serif`, used by the overlay now and by the canvas in 5.3.8) and `PAGE_FADE_SECONDS = 0.15`. `BookPageOverlay.tsx` imports these constants and `PAGE_METRICS` (`rect.width * value`) instead of its own hex strings and numbers, with no change to what it shows. No canvas, no Three.js, no texture, no material change and no driver change in this task. Add playbook entries P32-P36.
+    - Files: new `src/book/leafFaces.ts`, `pageCrossfade.ts`; `src/book/bookLook.ts` (leaf colors), `bookFonts.ts` (`BOOK_BODY_STACK`), `BookPageOverlay.tsx` (shared constants only), `src/book/index.ts`; tests `src/tests/leafFaces.test.ts`, `pageCrossfade.test.ts`, `bookLook.test.ts` (leaf colors), `bookOverlay.test.tsx` (metrics and shared constants), `bookFonts.test.ts`; `docs/KIRO_PLAYBOOK.md` (P32-P36).
+    - Requirements: 2.3, 2.4, 2.2, 8.2, 8.3, 9.2
+    - Acceptance criteria:
+      - `leafFaces.ts` and `pageCrossfade.ts` import no React, Three.js, DOM, timers (source-scan test).
+      - Design properties 23-27 are five fast-check tests, at least 100 runs, tagged `Feature: graveyard-core, Property N: <title>` for N = 23 to 27: 23 each page on its own leaf face (backs empty; no goal, epitaph or notes text), 24 wrapped lines fit the page (fixed-width fake `measure`), 25 the face key tracks the drawn text, 26 texture size fits the limit and keeps the aspect (default limit 512 by 768, result 512 x 686 for the page face), 27 the cross-fade never uncovers the page (random sequences of phases, statuses and overlay-opaque reports; reduced motion gives duration 0). Generators include empty, long, multi-line and non-Latin text.
+      - Cross-fade ordering test against the model: texture visible before the overlay is hidden in the same step; fade-in 0.15 s with texture still visible; blank-paper swap only after the opacity report; no report leaves the texture in place; reduced motion has no fade and no blank frame.
+      - Overlay metrics equal `PAGE_METRICS * rect.width`; the overlay shows the saved value; the overlay imports the same colors and font stacks (no duplicated hex strings in the overlay).
+      - Leaf colors in `bookLook`: blue channel not below red, hue outside the amber range; no new light or shadow.
+      - `docs/KIRO_PLAYBOOK.md` has entries P32-P36 for design properties 23-27.
+      - All earlier tests pass; `tsc` strict has no errors.
+    - _Requirements: 2.2, 2.3, 2.4, 8.2, 8.3, 9.2_
+
+  - [ ] 5.3.8 Leaf textures and overlay cross-fade wiring
+    - Scope: page text is drawn onto the leaf faces so it turns with the paper. Needs 5.3.7 (no new pure logic here: use `leafFaces`, `pageCrossfade`, `PAGE_METRICS`, `BOOK_BODY_STACK`, `PAGE_FADE_SECONDS` and the leaf colors from 5.3.7). Add the canvas adapter `leafTextures` (no React): three canvases of at most 512 x 686 (the face aspect is about 0.746, so 512 x 686, not 512 x 768), `generateMipmaps = false`, linear filtering, sRGB, one texture per leaf, ops from `leafFaces` drawn with `fillText`, `fillRect` and `strokeRect`; field boxes, button and "Page n of 3" caption are also drawn on the texture. Textures are created when the book leaves `closed` (OPEN accepted) and disposed, with canvases and materials, when the phase returns to `closed`, in the same place as the curl geometry; a closed book never has them. While open, each leaf mesh uses the material array `[edge, edge, edge, edge, front, back]` (shared edge material, shared blank paper back, per-leaf front with the canvas texture as `map` and a low `emissiveMap`, start near 0.25) and the curl geometry uses the same material indices (4 front, 5 back). Redraw: `ensureBookFont().then(redrawAll)` after the textures are created, never awaited, harmless if the book closed meanwhile; and on a changed `faceKey` (a dirty leaf is redrawn at once if its texture is visible, otherwise when it becomes visible at turn start or when the phase leaves `open`; only dirty leaves are drawn). Cross-fade wiring in the driver and the overlay, exact ordering: (1) turn start, or phase leaving `open`: in one synchronous step first redraw dirty textures and show the texture on the front materials, then hide the overlay at once (`opacity 0`, `transition: none`); (2) turn end (`idle` again, or `open` reached): the overlay fades in over `PAGE_FADE_SECONDS = 0.15` s, ease-out, with the texture still visible during the fade; (3) the overlay reports opacity 1 (`transitionend` for `opacity`, or at once when the duration is 0), and only then the front slot is swapped to the blank paper material (never `visible = false`); if the report never arrives the texture stays under the opaque overlay; (4) reduced motion: `crossfadeSeconds(true) = 0`, overlay at full opacity at once, texture hidden in the same step, no fade. The overlay and the canvas consume the same `leafFaces` ops, `PAGE_METRICS`, `BOOK_FONT_STACK`, `BOOK_BODY_STACK` and `bookLook` colors. Paper blue-gray and readable at night through the emissive map; no amber, no new lights, no shadow casting. If no 2D context is available, no textures exist, the leaves keep the shared paper material and the overlay works alone with no message and no console output. No playbook entries here. The first manual look at the texture is deferred to 5.3.9.
+    - Files: new `src/book/leafTextures.ts`; `src/book/bookAssets.ts` and `Book.tsx` (material array), `leafCurlMesh.ts` (groups with material indices 4 and 5), `BookSequenceDriver.tsx` (create, dispose, redraw, swap, cross-fade), `BookPageOverlay.tsx` (fade and opacity report), `src/book/index.ts`; tests `src/tests/leafTextures.test.ts` and updates to the existing book, overlay and driver tests.
+    - Requirements: 2.3, 2.4, 2.2, 8.2, 8.3, 9.2
+    - Acceptance criteria:
+      - Texture size never exceeds 512 x 686 for the real page face; three textures use `generateMipmaps = false`.
+      - Textures are created when the book leaves `closed` and `dispose` is called on every texture, canvas reference and material at `closed` (test counts disposals); closed books own none.
+      - Redraw: a fake font promise resolving after creation triggers one redraw; resolving after close does nothing; a changed text redraws only the dirty leaf, and only when visible or at the moment it becomes visible; nothing is drawn per frame.
+      - Driver-level cross-fade ordering behaves as the 5.3.7 model: texture visible before the overlay is hidden in the same step; fade-in 0.15 s with texture still visible; blank-paper swap only after the opacity report; no report leaves the texture in place; reduced motion has no fade and no blank frame.
+      - Canvas drawing is tested against a fake 2D context that records calls.
+      - Example tests: leaf paper and ink contrast at least 7:1; no `PointLight`, `SpotLight` or `castShadow` added; four parts and their mesh counts unchanged in every phase (reuse the 5.3.6 `parts` test).
+      - Source scan: the `useFrame` callbacks in the driver and in `leafTextures`/`leafCurlMesh` contain no allocation (`new `, array or object literals, canvas creation, `fillText`).
+      - No 2D context: the book still opens and the overlay works alone with no message and no console output.
+      - All earlier tests pass; `tsc` strict has no errors.
+    - _Requirements: 2.2, 2.3, 2.4, 8.2, 8.3, 9.2_
+
+  - [ ] 5.3.9 Integration and checkpoint
+    - Scope: wire the whole flow and handle edge cases, measure on the target machine, update logs. Handle skip, reload and removed-project cases, now including the curl and the leaf text: a project removed or no longer resting while open dispatches SKIP then CLOSE, requests the pointer, and disposes the curl geometry and leaf textures; reload always starts `closed` with nothing created; SKIP during a curled turn finishes it and restores the flat leaf and shared materials; `paused` freezes ticks (curl and fade included) and restores the mode. Reduced motion verified end to end (no curl, no fade). Manual GPU measurement on Low quality of the frame rate during a curled turn and the look of the cross-fade. Update `docs/KIRO_LOG.md`. Verify `docs/KIRO_PLAYBOOK.md` holds entries P25-P36 (P25-P31 added in 5.3.6, P32-P36 in 5.3.7) and fill any gap. Update `requirements.md` so 2.1, 2.3 and 2.5 describe the new flow (see open items below).
+    - Files: `src/book/readingBook.ts`, `src/book/BookSequenceDriver.tsx`, `src/interaction/uiMode.ts` (only if integration needs it), `src/tests/` (integration tests), `docs/KIRO_LOG.md`, `docs/KIRO_PLAYBOOK.md` (check only), `.kiro/specs/graveyard-core/requirements.md`.
+    - Requirements: 2.1, 2.2, 2.3, 2.5, 2.6, 8.1, 8.2, 8.3, 9.1, 9.2, 9.3
+    - Acceptance criteria:
+      - Integration test also covers curl and text: OPEN creates the curl geometry and leaf textures once; a curled turn swaps and restores the leaf; CLOSE, SKIP, project removal and `paused` leave no curl geometry, texture, canvas or material undisposed and the shared leaf geometry and material restored.
+      - Reload (fresh module state) starts `closed` with no curl geometry and no textures; SKIP mid-turn lands on the correct final state without replaying.
+      - Reduced motion end to end: no curl, no fade, and the overlay is opaque at once.
+      - Manual checklist on the target machine, Low quality, all results recorded in `docs/KIRO_LOG.md`; no performance claim without them:
+        - frame rate during the opening sequence;
+        - frame rate during a curled turn, compared with a flat turn;
+        - first open with the texture upload (no visible stutter);
+        - cross-fade look at 100% zoom (no visible shift or blank frame, readable at night, no amber);
+        - cursor shapes;
+        - Escape refusal, then "Click to resume";
+        - font fallback by renaming the font file once.
+      - `docs/KIRO_PLAYBOOK.md` contains P25-P36 (P25-P31 added by 5.3.6, P32-P36 by 5.3.7); this task only checks them.
       - Integration test: with a mocked pointer, OPEN to `open`, a page turn, CLOSE, back to `closed` ends with page 0, `inputLocked` false and an `unlocked` request issued.
       - Removing the open project in the store returns the book to `closed` and the player to a usable state.
       - OPEN is refused while mode is `burying`, `resurrecting` or `paused`.
-      - Manual measurement on the target machine on Low quality: frame rate during the sequence and on the first open (no visible stutter), cursor shapes, Escape refusal then "Click to resume", font fallback by renaming the font file once. Results recorded in `docs/KIRO_LOG.md`; no performance claim without them.
-      - `docs/KIRO_LOG.md` records what the spec, steering and property tests contributed in tasks 5.3.1 to 5.3.6.
+      - `docs/KIRO_LOG.md` records what the spec, steering and property tests contributed in tasks 5.3.1 to 5.3.9, including the curl, the leaf text and the playbook entries P25-P36.
       - `requirements.md` 2.1, 2.3 and 2.5 are rewritten for the new flow (book lifts off its base and approaches the player; three pages; book returns to its base). The decision on page 3 and `reducedVersion` below is recorded there once the user answers.
       - All tests pass; ask the user if questions arise.
-    - _Requirements: 2.1, 2.2, 2.5, 2.6, 8.1, 8.3, 9.1, 9.2, 9.3_
+    - _Requirements: 2.1, 2.2, 2.3, 2.5, 2.6, 8.1, 8.2, 8.3, 9.1, 9.2, 9.3_
 
-  - **Open items for the user (decide before 5.3.6)**
-    - Requirements 2.1, 2.3 and 2.5 still describe the slab flow and four parts. 5.3.6 updates them once the user confirms the wording.
+  - **Open items for the user (decide before 5.3.9)**
+    - Requirements 2.1, 2.3 and 2.5 still describe the slab flow and four parts. 5.3.9 updates them once the user confirms the wording.
     - Decide whether page 3 also holds `reducedVersion` (Requirement 5.1 encourages it) or whether it stays editable only in the grimoire. `goal`, `epitaph` and `notes` also have no page; confirm they stay in the grimoire.
 
 - [ ] 6. Grimoire and burial
@@ -154,10 +210,13 @@ Build Graveyard of Ideas in layers: pure domain logic first (cheap, GPU-free, pr
     { "id": 9, "tasks": ["5.3.3"] },
     { "id": 10, "tasks": ["5.3.5"] },
     { "id": 11, "tasks": ["5.3.6"] },
-    { "id": 12, "tasks": ["6.2", "7.2"] },
-    { "id": 13, "tasks": ["7.3", "8.1"] },
-    { "id": 14, "tasks": ["9.2", "10.1"] },
-    { "id": 15, "tasks": ["10.2", "10.3"] }
+    { "id": 12, "tasks": ["5.3.7"] },
+    { "id": 13, "tasks": ["5.3.8"] },
+    { "id": 14, "tasks": ["5.3.9"] },
+    { "id": 15, "tasks": ["6.2", "7.2"] },
+    { "id": 16, "tasks": ["7.3", "8.1"] },
+    { "id": 17, "tasks": ["9.2", "10.1"] },
+    { "id": 18, "tasks": ["10.2", "10.3"] }
   ]
 }
 ```
@@ -166,6 +225,7 @@ Build Graveyard of Ideas in layers: pure domain logic first (cheap, GPU-free, pr
 - Run one top-level task per Kiro session and commit after each (for example "Task 2: domain core").
 - Order of work: 1, 2 and 3 first (no graphics card needed), then 4 with the performance checkpoint before investing in visuals.
 - Never run all tasks at once while credits are limited.
-- Task 5.3 sub-tasks run strictly in order 5.3.1 to 5.3.6, one session and one commit each (for example "Task 5.3.1: pure book core"). 5.3.2 and 5.3.4 are independent of each other and can run in either order.
-- Design properties 1-15 map to playbook P10-P24 (design property N is playbook P(N+9)).
+- Task 5.3 sub-tasks run strictly in order 5.3.1 to 5.3.9, one session and one commit each (for example "Task 5.3.1: pure book core"). 5.3.2 and 5.3.4 are independent of each other and can run in either order.
+- Design properties 1-27 map to playbook P10-P36 (design property N is playbook P(N+9)). Properties 1-15 are P10-P24 (5.3.1), 16-22 are P25-P31 (written to docs/KIRO_PLAYBOOK.md in 5.3.6), 23-27 are P32-P36 (written in 5.3.7). 5.3.9 only checks that P25-P36 exist.
+- 5.3.6, 5.3.7, 5.3.8 and 5.3.9 run strictly in sequence (5.3.8 needs the pure modules of 5.3.7, and 5.3.6 and 5.3.8 both touch the leaf mesh and `BookSequenceDriver.tsx`). 5.3.7 is GPU-free (pure modules and constants only).
 - Keep docs/KIRO_LOG.md updated with what the spec, steering and tests contributed in each session.

@@ -2,7 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type * as THREE from 'three';
 import type { QualityLevel } from './domain';
-import { BookReader, BookSequenceDriver, useReadingInput, useReadingPhase } from './book';
+import {
+  BookReader,
+  BookSequenceDriver,
+  ensureBookFont,
+  useReadingInput,
+  useReadingPhase,
+} from './book';
 import { appStore, useAppStore } from './store/appStore';
 import NightScene from './world/NightScene';
 import { nextQuality, qualityLabel, resolvePreset } from './world/quality';
@@ -59,6 +65,16 @@ export default function App() {
   const preset = useMemo(() => resolvePreset(quality, reducedMotion), [quality, reducedMotion]);
 
   const inputLocked = useReadingPhase() !== 'closed';
+
+  const hasRestingProject = useAppStore((state) =>
+    state.data.projects.some((project) => project.status === 'resting'),
+  );
+  const fontRequested = useRef(false);
+  useEffect(() => {
+    if (!hasRestingProject || fontRequested.current) return;
+    fontRequested.current = true;
+    void ensureBookFont();
+  }, [hasRestingProject]);
 
   useReadingInput();
   useDemoProjectsKey();

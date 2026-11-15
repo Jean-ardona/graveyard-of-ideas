@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { COLORS } from '../world/config';
 import { mergeParts, placed } from '../world/geometryUtils';
-import { createCoverBorderTexture, createCoverMaterial, createPageEdgeMaterial } from './bookLook';
+import { createCoverBorderTexture, createCoverMaterial, createLeafMaterial, createPageEdgeMaterial } from './bookLook';
+import { BOARD_THICKNESS, BOOK_DEPTH, LEAF_COUNT, LEAF_THICKNESS, restLeafZ } from './bookStack';
 
 /**
  * Geometry, materials and texture shared by every book. Created once, disposed once.
@@ -10,21 +11,20 @@ import { createCoverBorderTexture, createCoverMaterial, createPageEdgeMaterial }
  * that axis turns them about the spine.
  */
 
-export const BOOK_SIZE = { width: 0.3, height: 0.4, depth: 0.07 } as const;
+export const BOOK_SIZE = { width: 0.3, height: 0.4, depth: BOOK_DEPTH } as const;
 
-const BOARD = 0.012;
+const BOARD = BOARD_THICKNESS;
 const SPINE_WIDTH = 0.014;
 const INNER_WIDTH = BOOK_SIZE.width - SPINE_WIDTH - 0.01;
 const INNER_HEIGHT = BOOK_SIZE.height - 0.03;
 const INNER_DEPTH = BOOK_SIZE.depth - 2 * BOARD;
-const LEAF_DEPTH = 0.004;
+const LEAF_DEPTH = LEAF_THICKNESS;
 const HALF_WIDTH = BOOK_SIZE.width / 2;
 const HALF_DEPTH = BOOK_SIZE.depth / 2;
 const MIDDLE_Y = BOOK_SIZE.height / 2;
 /** The page block sits against the spine and leaves a margin on the open side. */
 const INNER_CENTER_X = -HALF_WIDTH + SPINE_WIDTH + INNER_WIDTH / 2;
 
-export const LEAF_COUNT = 3;
 /** The leaves lie against the front board; page 1 is the outermost one. */
 const BLOCK_DEPTH = INNER_DEPTH - LEAF_COUNT * LEAF_DEPTH;
 
@@ -35,11 +35,16 @@ const FRONT_BOARD_Z = HALF_DEPTH - BOARD / 2;
 /** Pivot positions inside the book, for the model that assembles the parts. */
 export const BOOK_PIVOTS = {
   frontBoard: [HINGE_X, 0, FRONT_BOARD_Z],
-  leaves: Array.from({ length: LEAF_COUNT }, (_, j): [number, number, number] => [
-    HINGE_X,
-    0,
-    INNER_DEPTH / 2 - LEAF_DEPTH / 2 - j * LEAF_DEPTH,
-  ]),
+  leaves: Array.from({ length: LEAF_COUNT }, (_, j): [number, number, number] => [HINGE_X, 0, restLeafZ(j)]),
+} as const;
+
+/** The face of the outermost leaf in the frame of the book: the page the overlay sits on. */
+export const BOOK_PAGE_FACE = {
+  minX: INNER_CENTER_X - INNER_WIDTH / 2,
+  maxX: INNER_CENTER_X + INNER_WIDTH / 2,
+  minY: MIDDLE_Y - INNER_HEIGHT / 2,
+  maxY: MIDDLE_Y + INNER_HEIGHT / 2,
+  z: INNER_DEPTH / 2,
 } as const;
 
 /** A box whose center is at (x, y, z) in the frame of its pivot. */
@@ -84,7 +89,7 @@ export function createBookAssets(): BookAssets {
   const coverMaterial = createCoverMaterial(coverTexture);
   const spineMaterial = new THREE.MeshStandardMaterial({ color: COLORS.bookSpine, flatShading: true, roughness: 1 });
   const pageBlockMaterial = createPageEdgeMaterial();
-  const leafMaterial = createPageEdgeMaterial();
+  const leafMaterial = createLeafMaterial();
 
   return {
     frontBoard,

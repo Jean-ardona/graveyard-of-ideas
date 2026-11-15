@@ -7,6 +7,7 @@ const projectArb = fc.record({
   description: fc.string({ minLength: 1, maxLength: 120 }),
   abandonReason: fc.option(fc.string({ maxLength: 120 }), { nil: undefined }),
   nextAction: fc.option(fc.string({ maxLength: 120 }), { nil: undefined }),
+  reducedVersion: fc.option(fc.string({ maxLength: 120 }), { nil: undefined }),
   buriedAt: fc.option(
     fc.date({ min: new Date('2000-01-01'), max: new Date('2100-01-01'), noInvalidDate: true }).map((d) => d.toISOString()),
     { nil: undefined },
@@ -30,9 +31,18 @@ describe('layoutPages', () => {
         ]);
 
         const third = pages[2];
-        expect(third.fields.map((f) => [f.field, f.value])).toEqual([['nextAction', project.nextAction ?? '']]);
+        expect(third.fields.map((f) => [f.field, f.value])).toEqual([
+          ['nextAction', project.nextAction ?? ''],
+          ['reducedVersion', project.reducedVersion ?? ''],
+        ]);
         expect(third.resurrectButton).toBeDefined();
         expect(third.resurrectButton?.disabled).toBe(!hasHandler);
+
+        // Goal, epitaph and notes stay in the grimoire.
+        const shown = pages.flatMap((page) => page.fields.map((f) => f.field));
+        expect(shown).not.toContain('goal');
+        expect(shown).not.toContain('epitaph');
+        expect(shown).not.toContain('notes');
       }),
       { numRuns: 200 },
     );

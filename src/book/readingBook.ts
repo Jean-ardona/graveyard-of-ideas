@@ -4,6 +4,7 @@ import type { Project } from '../domain';
 import { allowsMovement, getPointerMode } from '../interaction/pointerLock';
 import { canOpenBook } from '../interaction/uiMode';
 import { appStore, useAppStore } from '../store/appStore';
+import type { TurnDirection } from './pageTurn';
 import { readingMachine } from './readingMachine';
 
 /** Which book is open for reading, if any. Only the id lives here; the project data stays in the saved store. */
@@ -35,6 +36,31 @@ export function openBook(projectId: string, playerInFront: boolean): void {
   readingStore.setState({ projectId });
   readingMachine.open(guard);
   skipWhenReducedMotion();
+}
+
+/** Reduced motion ends a page turn at once, and a close that waited for it plays out as a skip. */
+function finishTurnWhenReducedMotion(): void {
+  if (!appStore.getState().data.prefs.reducedMotion) return;
+  readingMachine.finishTurn();
+  readingMachine.skip();
+}
+
+/** Turns one page by keyboard. */
+export function turnPage(direction: TurnDirection): void {
+  readingMachine.turnPage(direction);
+  finishTurnWhenReducedMotion();
+}
+
+/** Releases a page drag: at least half the turn distance completes the turn. */
+export function endPageDrag(): void {
+  readingMachine.endDrag();
+  finishTurnWhenReducedMotion();
+}
+
+/** Abandons a page drag; the page returns. */
+export function cancelPageDrag(): void {
+  readingMachine.cancelDrag();
+  finishTurnWhenReducedMotion();
 }
 
 /** Plays the sequence back to the base. Closing waits for a page turn to finish. */

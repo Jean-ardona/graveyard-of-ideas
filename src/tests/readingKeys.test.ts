@@ -34,6 +34,11 @@ describe('routeReadingKey', () => {
     expect(routeReadingKey('ArrowLeft', true, 'open')).toBeNull();
   });
 
+  it('cancels a drag with Escape instead of closing', () => {
+    expect(routeReadingKey('Escape', false, 'open', true)).toBe('CANCEL_DRAG');
+    expect(routeReadingKey('Escape', false, 'open', false)).toBe('CLOSE');
+  });
+
   it('turns pages only when open', () => {
     expect(routeReadingKey('ArrowRight', false, 'coverOpening')).toBeNull();
     expect(routeReadingKey('ArrowRight', false, 'open')).toBe('NEXT_PAGE');

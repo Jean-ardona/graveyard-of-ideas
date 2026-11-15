@@ -33,7 +33,7 @@ The planning is already written here, so credits go to implementation. Run one t
 - P20 Keyboard turning equals a completed drag; next then prev returns to the same page; ends are no-ops.
 - P21 Closing waits for pages: CLOSE during a turn leaves open only when the page model is idle.
 - P22 Rendered leaf angle follows the cover (0 when the cover is closed).
-- P23 Page layout shows the required content per page; the resurrection button is disabled without a handler.
+- P23 Page layout shows the required content per page (title and date; reason and idea; next action and reduced version; never goal, epitaph or notes); the resurrection button is disabled without a handler.
 - P24 Key routing: Escape closes, E closes only outside text fields, arrows turn pages only outside text fields.
 
 ## 3. Hooks worth creating in Kiro

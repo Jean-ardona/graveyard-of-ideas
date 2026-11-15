@@ -95,15 +95,25 @@ export function turnByKey(state: PageTurnState, direction: TurnDirection): void 
   settle(state, 1);
 }
 
+/** Ends a settling turn at its target: a completed turn changes the page, a returned one does not. */
+function arrive(state: PageTurnState, direction: TurnDirection): void {
+  if (state.settleTarget === 1) state.index += direction === 'next' ? 1 : -1;
+  rest(state);
+}
+
 /** Moves a settling turn toward its target and finishes it on arrival. */
 export function tickPageTurn(state: PageTurnState, dt: number): void {
   if (state.status !== 'settling' || state.direction === null) return;
   const step = Math.max(dt, 0) / PAGE_TURN.settleSeconds;
   const target = state.settleTarget;
   state.progress = target === 1 ? Math.min(state.progress + step, 1) : Math.max(state.progress - step, 0);
-  if (state.progress !== target) return;
-  if (target === 1) state.index += state.direction === 'next' ? 1 : -1;
-  rest(state);
+  if (state.progress === target) arrive(state, state.direction);
+}
+
+/** Finishes a settling turn at once, for reduced motion. Does nothing in any other status. */
+export function settleNow(state: PageTurnState): void {
+  if (state.status !== 'settling' || state.direction === null) return;
+  arrive(state, state.direction);
 }
 
 const HALF_TURN = Math.PI;

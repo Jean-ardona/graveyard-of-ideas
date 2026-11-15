@@ -10,7 +10,6 @@ import {
   maxLengthOf,
 } from '../domain';
 import type { Project } from '../domain';
-import { BOOK_PARTS } from '../book/bookParts';
 import { BOOK_SIZE, createBookAssets } from '../book/bookAssets';
 import { getBookHandle, registerBookHandle } from '../book/bookHandles';
 import { BOOK_REST_FOOTPRINT, BOOK_REST_SCALE, applyRestPose, createBookModel } from '../book/bookModel';
@@ -26,22 +25,6 @@ function restingProjects(count: number): Project[] {
   }
   return projects;
 }
-
-describe('BOOK_PARTS', () => {
-  it('has the four parts in order', () => {
-    expect(BOOK_PARTS.map((part) => part.title)).toEqual([
-      'Ambition',
-      'Abandonment',
-      'Remains',
-      'Second chance',
-    ]);
-  });
-
-  it('shows every editable field exactly once', () => {
-    const shown = BOOK_PARTS.flatMap((part) => part.fields.map((spec) => spec.field));
-    expect([...shown].sort()).toEqual([...EDITABLE_FIELDS].sort());
-  });
-});
 
 describe('editProject', () => {
   it('changes only the edited project and field, and stamps updatedAt', () => {

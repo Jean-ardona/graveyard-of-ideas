@@ -3,12 +3,14 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Quaternion, Vector3 } from 'three';
 import type { Camera } from 'three';
 import { getPointerMode, releasePointer, requestPointer, subscribePointerMode } from '../interaction/pointerLock';
-import { BOOK_PIVOTS, BOOK_SIZE } from './bookAssets';
+import { BOOK_PAGE_FACE, BOOK_PIVOTS, BOOK_SIZE } from './bookAssets';
 import { getBookHandle } from './bookHandles';
+import { LEAF_COUNT, leafCoverProgress, leafHingeAngle, leafHingeZ, leafTurnFraction } from './bookStack';
 import type { BookHandle } from './bookHandles';
 import { isOpening } from './bookSequence';
 import { COVER_OPEN_ANGLE, LIFT_HEIGHT, READING_POSE } from './bookTimings';
-import { isIdle } from './pageTurn';
+import { clearPageRect, writePageRect } from './pageRect';
+import { isIdle, renderedLeafAngle } from './pageTurn';
 import { closeBook, getReadingProjectId } from './readingBook';
 import { readingMachine } from './readingMachine';
 
@@ -21,8 +23,11 @@ const baseQuaternion = new Quaternion();
 const targetPosition = new Vector3();
 const targetQuaternion = new Quaternion();
 const parentQuaternion = new Quaternion();
+const pageCorner = new Vector3();
 /** Uniform scale of the resting book; it shrinks to 1 on the way to the reading pose. */
 let baseScale = 1;
+/** Turned fractions last written, so a leaf is touched only when it changes. NaN forces a first write. */
+const writtenLeafFractions: number[] = Array.from({ length: LEAF_COUNT }, () => Number.NaN);
 
 /**
  * Where the book origin (bottom center) sits in camera space when open: the spine on the
@@ -41,6 +46,7 @@ function captureReadingPose(handle: BookHandle, camera: Camera): void {
   basePosition.copy(root.position);
   baseQuaternion.copy(root.quaternion);
   baseScale = root.scale.x;
+  writtenLeafFractions.fill(Number.NaN);
   targetPosition.set(READING_X, READING_Y, READING_Z).applyQuaternion(camera.quaternion).add(camera.position);
   targetQuaternion.copy(camera.quaternion);
   const parent = root.parent;
@@ -63,6 +69,42 @@ function applyPose(handle: BookHandle): void {
   root.quaternion.copy(baseQuaternion).slerp(targetQuaternion, approach);
   root.scale.setScalar(baseScale + (1 - baseScale) * approach);
   handle.parts.cover.rotation.y = -COVER_OPEN_ANGLE * cover;
+  applyLeaves(handle, cover);
+}
+
+/**
+ * Turns the leaves about the spine, like the cover, and lifts each to its height: turned leaves
+ * fold back with the cover and lie above its inner face. A leaf is written only when its turned
+ * fraction changed: at most two change in any one step.
+ */
+function applyLeaves(handle: BookHandle, cover: number): void {
+  const { leaves } = handle;
+  for (let j = 0; j < leaves.length; j++) {
+    const fraction = leafTurnFraction(renderedLeafAngle(readingMachine.pages, j, leafCoverProgress(j, cover)));
+    if (fraction === writtenLeafFractions[j]) continue;
+    writtenLeafFractions[j] = fraction;
+    const leaf = leaves[j]!;
+    leaf.rotation.y = -leafHingeAngle(j, fraction);
+    leaf.position.z = leafHingeZ(j, fraction);
+  }
+}
+
+/**
+ * Projects the open right-hand page to screen pixels. The camera is frozen and the book rests
+ * in a fixed pose, so this runs once on reaching `open` and when the canvas size changes.
+ */
+function projectPageRect(handle: BookHandle, camera: Camera, width: number, height: number): void {
+  handle.root.updateWorldMatrix(true, false);
+  camera.updateMatrixWorld();
+  pageCorner.set(BOOK_PAGE_FACE.minX, BOOK_PAGE_FACE.maxY, BOOK_PAGE_FACE.z);
+  pageCorner.applyMatrix4(handle.root.matrixWorld).project(camera);
+  const left = ((pageCorner.x + 1) / 2) * width;
+  const top = ((1 - pageCorner.y) / 2) * height;
+  pageCorner.set(BOOK_PAGE_FACE.maxX, BOOK_PAGE_FACE.minY, BOOK_PAGE_FACE.z);
+  pageCorner.applyMatrix4(handle.root.matrixWorld).project(camera);
+  const right = ((pageCorner.x + 1) / 2) * width;
+  const bottom = ((1 - pageCorner.y) / 2) * height;
+  writePageRect(left, top, right - left, bottom - top);
 }
 
 /**
@@ -72,14 +114,27 @@ function applyPose(handle: BookHandle): void {
  */
 export default function BookSequenceDriver() {
   const camera = useThree((state) => state.camera);
+  const size = useThree((state) => state.size);
   const active = useRef<BookHandle | null>(null);
+  const sizeRef = useRef(size);
+  sizeRef.current = size;
+
+  // The canvas fills the window, so a new canvas size is a window resize. The camera aspect is
+  // updated by the renderer before this effect runs.
+  useEffect(() => {
+    if (readingMachine.phase() === 'open' && active.current) {
+      projectPageRect(active.current, camera, size.width, size.height);
+    }
+  }, [camera, size]);
 
   useEffect(() => {
     let wasClosed = readingMachine.phase() === 'closed';
+    let wasOpen = readingMachine.phase() === 'open';
     let wasReleased = readingMachine.pointerLockReleased();
 
     const unsubscribeMachine = readingMachine.subscribe(() => {
       const closed = readingMachine.phase() === 'closed';
+      const open = readingMachine.phase() === 'open';
       if (wasClosed && !closed) {
         const id = getReadingProjectId();
         active.current = (id !== null && getBookHandle(id)) || null;
@@ -95,7 +150,14 @@ export default function BookSequenceDriver() {
       }
 
       if (active.current) applyPose(active.current);
-      if (closed) active.current = null;
+      if (open && !wasOpen && active.current) {
+        projectPageRect(active.current, camera, sizeRef.current.width, sizeRef.current.height);
+      }
+      wasOpen = open;
+      if (closed) {
+        active.current = null;
+        clearPageRect();
+      }
     });
 
     // Escape leaves Pointer Lock without a key event: the lost lock reverses the opening.

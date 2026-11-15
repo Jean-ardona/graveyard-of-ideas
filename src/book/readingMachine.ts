@@ -17,6 +17,7 @@ import {
   endDrag,
   isIdle,
   resetPageTurn,
+  settleNow,
   tickPageTurn,
   turnByKey,
 } from './pageTurn';
@@ -38,6 +39,8 @@ export interface ReadingMachine {
   endDrag(): void;
   cancelDrag(): void;
   turnPage(direction: TurnDirection): void;
+  /** Ends a settling turn at once (reduced motion). A close that was waiting for the pages then goes ahead. */
+  finishTurn(): void;
   /** Derived selectors. */
   phase(): BookPhase;
   uiMode(): UiMode;
@@ -106,6 +109,11 @@ export function createReadingMachine(): ReadingMachine {
     endDrag: () => whileOpen(() => endDrag(pages)),
     cancelDrag: () => whileOpen(() => cancelDrag(pages)),
     turnPage: (direction) => whileOpen(() => turnByKey(pages, direction)),
+    finishTurn: () =>
+      whileOpen(() => {
+        settleNow(pages);
+        tickSequence(sequence, 0, isIdle(pages));
+      }),
     phase: () => sequence.phase,
     uiMode: () => uiModeForPhase(sequence.phase),
     pointerLockReleased: () => sequence.phase === 'open',

@@ -10,6 +10,9 @@ import { COLORS } from '../world/config';
 export const BOOK_LOOK = {
   /** Pale blue-gray band of the page edges; clearly lighter than the cover. */
   pageEdge: '#b7c0cf',
+  /** Pale parchment blue-gray of the leaves, the color of the page overlay. */
+  leaf: '#c3ccdb',
+  leafGlowIntensity: 0.4,
   /** One-line border drawn on the front board. */
   coverBorder: '#5f7298',
   /** Emissive tint of the page edges and the cover border. */
@@ -64,6 +67,16 @@ export function createCoverMaterial(map: THREE.Texture): THREE.MeshStandardMater
     roughness: 1,
     emissive: BOOK_LOOK.rim,
     emissiveIntensity: BOOK_LOOK.coverRimIntensity,
+  });
+}
+
+/** Leaf face: close to the overlay page color, so the open book never flashes gray-blue. */
+export function createLeafMaterial(): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    color: BOOK_LOOK.leaf,
+    roughness: 1,
+    emissive: BOOK_LOOK.leaf,
+    emissiveIntensity: BOOK_LOOK.leafGlowIntensity,
   });
 }
 

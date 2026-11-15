@@ -87,7 +87,12 @@ src/book/
   readingMachine.ts     PURE. composes sequence + pages, routes events, derived selectors
   readingKeys.ts        PURE. (key, isTyping, phase) -> event
   bookPageLayout.ts     PURE. project -> page descriptors (what each page shows)
-  bookLook.ts           data: pale blue-gray colors, rim/emissive values
+  bookLook.ts           data: pale blue-gray colors, rim/emissive values, leaf paper and ink colors
+  leafCurl.ts           PURE. leafCurl(progress, segments, out) angles; leafStrip(...) writes strip positions and normals in place
+  leafFaces.ts          PURE. which text goes on which leaf face, wrapping with an injected measure, face keys, texture size
+  pageCrossfade.ts      PURE. visibility model of the leaf texture and the HTML overlay
+  leafCurlMesh.ts       adapter (Three.js, no React): curl geometry, in-place writes, swap and restore
+  leafTextures.ts       adapter (canvas, no React): draws the face ops onto three canvas textures, redraw, dispose
   bookFonts.ts          font family constants, fallback stack, ensureBookFont()
   BookSequenceDriver.tsx  R3F. useFrame: ticks the machine, applies transforms
   BookPageOverlay.tsx     HTML layer on the open page (replaces the tab panel of BookPages.tsx)
@@ -186,7 +191,7 @@ Functions (all take the state, mutate it in place): `beginDrag`, `dragTo(state, 
 - `leafAngle(state, j)`: turned leaves (`j < index`) are at pi; for `next` leaf `index` is at `progress * pi`; for `prev` leaf `index - 1` is at `(1 - progress) * pi`; all others 0.
 - During `closing` and `coverOpening`, the rendered leaf angle is `leafAngle * cover`, so turned leaves fold back with the cover. No extra state.
 
-No mesh deformation. Page curl stays on the polish backlog.
+The rigid rotation above is the model of the leaf angle. The curved turn (see "Curved page turn") adds a bend on top of it and never changes `leafAngle`, `renderedLeafAngle` or any page-model rule.
 
 Allocation: three leaf meshes share one geometry and one material; the driver writes `rotation.y` of at most two leaves, and only when the value changed.
 
@@ -244,16 +249,100 @@ Loading and fallback:
 `uiMode.ts` holds the mode type (exploring, openingGrave, reading, closingGrave, burying, resurrecting, paused) and a guard `canStartCinematic(mode)`. The book machine is the only writer of the three grave modes and updates the mode only on phase changes, not per frame. Opening the book is refused in `burying`, `resurrecting` and `paused`. If a menu opens while reading (task 9.1), `paused` freezes ticks and restores the previous mode on resume. Task 7 will hand the open book to `resurrecting` through its own event; that hand-off is not designed here, and the four book parts stay separate meshes so the ember dissolve can treat each one.
 
 ### Performance (Low is the default)
-- Only rotations and positions animate. No new lights, no shadows from the book, no post-processing, no CSS 3D.
+- Rotations and positions animate; the one exception is the vertex positions of the single turning leaf (see "Curved page turn"). No new lights, no shadows from the book, no post-processing, no CSS 3D.
 - Geometries and materials are shared across all books and leaves; the reading pose, temporary vectors and quaternions are preallocated once and reused. The driver does nothing when the phase is `closed`, or `open` with idle pages.
 - Allocation happens only on discrete events, never per frame.
 - Measure on the target machine at the milestone; no performance claim is made here.
+
+### Four-part contract (after task 5.3.5)
+`BOOK_PARTS` and `bookParts.ts` no longer exist. The contract is now the `BookHandle` returned by `getBookHandle(projectId)`:
+- `handle.parts` has exactly the keys `cover`, `spine`, `pageBlock` and `pages`. They are four distinct `Object3D`s, each reachable from `handle.root`, each holding its own meshes (`cover`, `spine` and `pageBlock` one mesh each, `pages` the three leaf meshes). `handle.leaves` are the three leaf hinges inside `pages`.
+- Task 7.2 dissolves each part through the handle, never by traversing the scene or by name.
+- These are mesh parts. The four content parts of Requirement 2.3 (Ambition, Abandonment, Remains, Second chance) are page content, not meshes.
+- Curl and leaf text add no mesh and no part. The curl geometry replaces the geometry of an existing leaf mesh, and the textured materials replace its material, so the four parts and their mesh counts are the same in every phase.
+- Test coverage: `book.test.ts` already checks that `createBookModel` builds four distinct parts with the right mesh counts, and that the handle is reachable by id and has three leaves. It does not check `parts` through the handle. Add one example test that reads `getBookHandle(id).parts` after `registerBookHandle`, checks the four keys, four distinct objects, reachability from `root`, and the mesh counts, and repeats the mesh-count check while a curl and textured materials are active.
+
+### Curved page turn
+
+The turning leaf bends like paper. The rigid angle stays the model; the bend is only how the leaf is drawn.
+
+**Strip.** A leaf is a strip of `LEAF_CURL.segments = 12` segments of equal length `ds = leafWidth / 12`. `leafCurl(progress, segments, out)` (pure, `leafCurl.ts`) writes the absolute direction `phi[i]` of each segment into the preallocated `out` (Float64Array), measured about the spine axis like `leafAngle`: 0 points to the right side, pi to the left side. `progress` is the leaf fraction `leafAngle / pi`, so the input for a forward turn of leaf `index` is `progress`, and for a backward turn of leaf `index - 1` it is `1 - progress`.
+
+```ts
+LEAF_CURL = { segments: 12, tipLag: 0.8 }   // radians; tipLag < 1 keeps every angle in [0, pi]
+// s = clamp(progress, 0, 1), NaN treated as 0
+phi[i] = pi * s - tipLag * sin(pi * s) * w[i],   w[i] = i / (segments - 1)   // w[0] = 0; one segment: w = 0
+```
+- `phi[0]` is the spine angle `pi * s`, the same value as the rigid leaf angle, so the hinge never disagrees with the page model.
+- The tip trails the spine by at most `tipLag * sin(pi * s)`, so the bend is zero at both ends and largest in the middle. Curvature between neighbours is uniform: `phi[i] - phi[i-1] = -tipLag * sin(pi * s) / (segments - 1)`, a circular arc.
+- `leafStrip(phi, segments, width, depth, positions, normals)` (pure, same module) integrates the segment directions into positions in the hinge frame: `x += ds * cos(phi)`, `z += ds * sin(phi)`, the same orientation as the hinge rotation (`rotation.y = -angle`). The front face is the centerline offset by `+depth / 2` along the segment normal, the back face by `-depth / 2`, so the strip matches the flat leaf box at progress 0 and 1. Normals are written analytically (`(-sin phi, cos phi)`), so no `computeVertexNormals` and no allocation.
+
+**When it applies.** Only the leaf returned by a new pure helper `turningLeafIndex(state)` in `pageTurn.ts` (the leaf with angle strictly between 0 and pi, or `null` when idle), and only while `status !== 'idle'`, `cover === 1`, and reduced motion is off. Idle pages, closed books, the cover, the other leaves and the leaves folding back with the cover all keep the existing flat geometry and shared materials.
+- The hinge of the curling leaf is set to rotation 0 while its strip is drawn (the strip already carries the spine angle); on swap back it gets the usual `-renderedLeafAngle`. The swap is invisible because the strip is flat at progress 0 and 1 and the turn always starts and ends there.
+- Direction does not change the shape: dragging back, or a turn to the previous page, passes through the same shapes at the same leaf fractions. There is no hysteresis, so reversing mid-drag retraces the same shapes.
+
+**Lifetime and writes (`leafCurlMesh.ts`).**
+- One curl geometry per open book (two strips of 13 by 2 vertices, UV and index built once, position and normal attributes `DynamicDrawUsage`, buffers preallocated). It is created when the book leaves `closed` and disposed when it returns to `closed`. Nothing is created for closed books.
+- At turn start the turning leaf mesh gets the curl geometry (and `frustumCulled = false`, because the bounding sphere is not recomputed); at turn end it gets the shared flat leaf geometry back. At most one leaf is swapped at a time.
+- Each frame of a turn: if the leaf fraction equals the last written value, nothing is written. Otherwise `leafCurl` and `leafStrip` write into the existing arrays and `needsUpdate` is set on the two attributes. No array, vector or object is created per frame. The last written fraction is reset to NaN at turn start to force the first write.
+- No new light, no shadow casting (`castShadow` stays false), no change to the shared flat geometry or material.
+
+**Reduced motion.** No curl. `finishTurn` (the existing `settleNow` path) ends a release immediately; while the pointer is still held the leaf follows the drag rigidly with the flat geometry.
+
+### Text on the 3D leaves
+
+Page text is drawn onto the faces of the leaves so it turns with the paper. The HTML overlay stays the editable layer when the page is at rest; the texture is what shows during a turn and while the cover opens and closes.
+
+**Which text goes where (`leafFaces.ts`, pure).** `leafFaces(project, hasResurrectHandler, measure)` calls `layoutPages` and returns, for each of the three leaves, `{ front: DrawOp[], back: DrawOp[] }`. Front of leaf `j` is page `j`; every back is empty (blank parchment, as in the page model). So the content rules of `layoutPages` (never goal, epitaph or notes) apply unchanged. Coordinates and sizes are in page-width units (1 = width of the page face), so the same ops serve any pixel size.
+```ts
+type FontRole = 'title' | 'body';
+type TextMeasure = (text: string, size: number, font: FontRole) => number;  // width in page-width units
+type DrawOp =
+  | { kind: 'text'; text: string; x: number; y: number; size: number; font: FontRole; align: 'left' | 'center'; tone: 'ink' | 'muted' }
+  | { kind: 'box'; x: number; y: number; w: number; h: number; role: 'field' | 'button' };
+```
+- Wrapping inputs: the text, the line width (page width minus the padding of `PAGE_METRICS`), the font size, and the injected `measure`. Greedy word wrap; a paragraph break (`\n`) starts a new line; a word wider than the line breaks by character. The title is clipped to 3 lines with an ellipsis, like the overlay. A multiline field shows its first 5 lines, like an unscrolled textarea with `rows=5`; a single-line field shows one line.
+- The canvas adapter passes `measure` from `ctx.measureText`; tests pass a fixed-width fake.
+- `PAGE_METRICS` (data, tuned on the target machine): paddings `0.06` top and `0.07` sides (the same percentages as the overlay, which are relative to the width), title size, body size, line height, caption size, field padding. The overlay converts them to pixels with `rect.width * value`, so the overlay and the texture are scaled copies of one layout.
+- `faceKey(ops)` is a string that is equal for equal ops.
+
+**Texture size (`textureSize(faceWidth, faceHeight, maxWidth = 512, maxHeight = 768)`, pure).** The page face is `INNER_WIDTH x INNER_HEIGHT` (about 0.276 x 0.37, aspect 0.746), not 2:3, so a 512 x 768 canvas would stretch the text. The size is scaled to fit inside 512 x 768 with the face aspect kept: 512 x 686. Three textures of 512 x 686 are about 1.4 MB each (4.2 MB), `generateMipmaps = false`, linear filtering, sRGB color space, one per leaf.
+
+**Drawing (`leafTextures.ts`, thin adapter).** Fills the paper color, draws the ops (`fillText`, `fillRect`/`strokeRect`), sets `needsUpdate`. It holds no logic beyond ops to canvas calls. If a 2D context is unavailable, no textures exist and the overlay works alone (see Error Handling).
+
+**Lifetime.**
+- Created when the book leaves `closed` (OPEN accepted), so the uploads happen during the lift, before the cover opens. Disposed (textures, canvases released, materials) when the phase returns to `closed`, in the same place that disposes the curl geometry. Closed books never have them.
+- While open, each leaf mesh has a material array in the box group order `[edge, edge, edge, edge, front, back]`: `edge` is the shared leaf material, `back` a shared blank paper material, `front` a per-leaf material with the canvas texture as `map` and a low `emissiveMap` (same texture, start near 0.25, tuned on the target machine) so the page stays readable at night without a light. At `closed` the shared material is restored. The curl geometry uses groups with the same material indices (4 front, 5 back), so the same array works for both.
+- Colors (`bookLook.ts`, data): `leafPaper` `#c3ccdb` (the overlay background today), `leafInk` `#141c30`, field fill `#dde3ee`, field border `#5a6a84`, muted `#3a4766`, button fill `#1d2740`, button text `#c8d8ff`, button border `#3b4d73`. Blue-gray, no amber. The overlay imports the same constants instead of its own hex strings. Example test: ink on paper contrast at least 7:1, blue channel not below red, hue outside the amber range.
+- Fonts: titles use `BOOK_FONT_STACK`; the body uses a new named stack `BOOK_BODY_STACK` in `bookFonts.ts` (the legible serif stack, used by both the canvas and the overlay instead of the bare `serif`).
+
+**Redraw.**
+- Font: when the textures are created, `ensureBookFont().then(redrawAll)` is called without awaiting. Nothing waits on it; the sequence never depends on it. If the book closed before the promise resolves, the callback sees disposed textures and does nothing.
+- Text: the store project is mapped through `leafFaces`; each leaf has a stored `faceKey`. A changed key marks that leaf dirty. A dirty leaf is redrawn at once if its texture is currently visible, and otherwise at the moment its texture becomes visible (turn start, or the phase leaving `open`). This keeps typing from redrawing a hidden canvas on every keystroke. Only the dirty leaves are drawn.
+- The texture shows the saved value. A rejected edit (empty description) stays visible in the field only; the first turn shows the saved words, which is what the field shows after the turn anyway ("Your last saved words are kept").
+
+**Cross-fade between texture and overlay.** Both draw the same page, so the swap has nothing to jump over:
+1. Same rectangle. The overlay rectangle is the projection of `BOOK_PAGE_FACE` (the front face of the outermost leaf), and the texture covers exactly that face (UV 0 to 1). At `open` the book rests camera-aligned, so the projected face is a rectangle.
+2. Same layout and metrics. Both consume `leafFaces` ops and `PAGE_METRICS` in page-width units (overlay: `rect.width * value`).
+3. Same font and colors: `BOOK_FONT_STACK`, `BOOK_BODY_STACK` and the `bookLook` colors; the field boxes, button and "Page n of 3" caption are drawn on the texture too.
+4. Same content: the saved values (see Redraw).
+Remaining differences are small and hidden by the fade: the DOM text is crisp and the texture is filtered, and browsers wrap with their own algorithm (same greedy rule and widths, so lines should match). Text caret and selection exist only in the overlay. Verify the match by eye on the target machine at 100% zoom.
+
+Ordering and duration (`pageCrossfade.ts`, pure):
+- The overlay is wanted only when `phase === 'open'` and `status === 'idle'`.
+- Turn start, or the phase leaving `open`: in one synchronous step, first dirty textures are redrawn and the front materials show the texture, then the overlay is hidden at once (`opacity 0`, `transition: none`). The machine listener runs inside the event, before React flushes, so the next frame shows the texture and the overlay is gone in the same paint. The driver renders every frame while a turn runs.
+- Turn end (`idle` again, or `open` reached): the overlay fades in over `PAGE_FADE_SECONDS = 0.15` s, ease-out (the existing value). The texture stays visible during the fade.
+- The overlay reports reaching opacity 1 (`transitionend` for `opacity`, or at once when the duration is 0). Only then the front slot is swapped to the blank paper material (never `visible = false`, so there is no see-through frame). If the report never arrives (hidden tab), the texture simply stays under the opaque overlay.
+- Reduced motion: `crossfadeSeconds(true) = 0`. The overlay is shown at full opacity at once and the report is immediate, so the texture is hidden in the same step with no fade.
+- Invariant: at every step either the texture is visible or the overlay is fully opaque, so the page is never blank.
+
+**Cost.** Canvas drawing happens on discrete events (open, font load, changed text on a visible leaf, turn start with a dirty leaf). Nothing is drawn per frame.
 
 ### Correctness Properties
 
 *A property is a characteristic or behavior that should hold true across all valid executions of a system-essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
 
-Reflection: opening completion, phase consistency and bounds were merged; reverse retrace, continuity and the open-close round trip were merged into two properties; the two frame-rate independence checks were merged; pointer and input invariants were merged into one property over arbitrary event sequences.
+Reflection: opening completion, phase consistency and bounds were merged; reverse retrace, continuity and the open-close round trip were merged into two properties; the two frame-rate independence checks were merged; pointer and input invariants were merged into one property over arbitrary event sequences. For the curl (Properties 16 to 22), "flat at the ends" and "no hysteresis" are kept apart because they fail for different reasons, while finite output and clamping were merged. For the leaf text (Properties 23 to 27), the paper color, the four-part contract and the draw calls are not properties (see Testing Strategy).
 
 #### Property 1: Sequence state is always consistent
 For any sequence of events and tick durations, `t` stays in [0, TOTAL], every progress value stays in [0, 1], the phase matches `t` while opening, `closed` implies `t = 0` and progress 0, and `open` implies `t = TOTAL` and progress 1.
@@ -330,17 +419,84 @@ For any key, typing flag and phase, Escape maps to `CLOSE` in every phase except
 
 **Validates: Requirements 2.6**
 
+The next properties cover the curved page turn and the text on the leaves. Playbook numbering continues the rule: design property N is playbook P(N+9), so Properties 16 to 27 are P25 to P36.
+
+#### Property 16: The leaf is flat at the ends (playbook P25)
+For any segment count from 1 to 64, `leafCurl` at progress 0 gives every segment angle 0, and at progress 1 gives every segment angle pi; the strip positions at 0 and 1 equal the flat leaf (points along the line at angle 0, and angle pi) within tolerance.
+
+**Validates: Requirements 2.2, 8.3**
+
+#### Property 17: Arc length is constant (playbook P26)
+For any progress and any segment count from 1 to 64, the polyline length of the strip centerline equals the leaf width within tolerance, every segment has length `width / segments`, and the first point is the hinge.
+
+**Validates: Requirements 2.2**
+
+#### Property 18: Angles are finite and inputs are clamped (playbook P27)
+For any real, NaN or infinite progress, every angle is finite and in [0, pi], the result equals the result for `clamp(progress, 0, 1)` (NaN as 0), and the written positions and normals are finite.
+
+**Validates: Requirements 2.2, 8.2**
+
+#### Property 19: Curvature is symmetric around the middle of the turn (playbook P28)
+For any progress in [0, 1] and any segment index, the curvature (the angle difference between neighbouring segments) at `progress` equals the curvature at `1 - progress` within tolerance, is never positive, and is largest in magnitude at progress 0.5.
+
+**Validates: Requirements 2.2**
+
+#### Property 20: The spine angle opens monotonically (playbook P29)
+For any two progress values `a <= b` in [0, 1], the spine angle (segment 0) at `a` is at most the spine angle at `b`, and it equals `pi * progress`, the rigid leaf angle.
+
+**Validates: Requirements 2.2**
+
+#### Property 21: The shape depends on the progress alone (playbook P30)
+For any sequence of progress values (a drag forward, back and forward again, or a turn to the next page followed by a turn to the previous page), every call with the same leaf fraction writes bit-identical angles and positions, whatever was written before and whatever the direction.
+
+**Validates: Requirements 2.2**
+
+#### Property 22: Only the turning leaf is deformed (playbook P31)
+For any page-turn state, `turningLeafIndex` is `null` when the state is idle; otherwise it is the only leaf whose angle lies strictly between 0 and pi, and the leaf fraction passed to `leafCurl` equals that leaf's angle divided by pi. No leaf is curled when the cover progress is below 1 or reduced motion is on.
+
+**Validates: Requirements 2.2, 8.3, 9.2**
+
+#### Property 23: Each page goes on its own leaf face (playbook P32)
+For any project and any handler flag, the front ops of leaf `j` contain exactly the text of page `j` from `layoutPages` (title, date, labels, saved values, button label, caption) and no text of another page; every back face has no text ops; no goal, epitaph or notes text appears on any face.
+
+**Validates: Requirements 2.3, 2.4, 9.2**
+
+#### Property 24: Wrapped lines fit the page (playbook P33)
+For any text, any width and any measure function with a positive width per character, every wrapped line is no wider than the width unless it is a single character; the lines before any clipping keep every non-whitespace character in order; the line count never exceeds the limit; an ellipsis appears only when text was clipped.
+
+**Validates: Requirements 2.3**
+
+#### Property 25: The face key tracks the drawn text (playbook P34)
+For any two projects, the face key of a leaf is equal exactly when the ops of that leaf are equal; changing any drawn text changes the key of its leaf and no other leaf's key; the same project always gives the same key.
+
+**Validates: Requirements 2.4, 9.2**
+
+#### Property 26: The texture size fits the limit and keeps the aspect (playbook P35)
+For any positive face width and height and any positive limit, the texture width and height are integers of at least 1, do not exceed the limit, and the aspect ratio differs from the face aspect by at most one texel of rounding; the default limit is 512 by 768.
+
+**Validates: Requirements 8.2**
+
+#### Property 27: The cross-fade never uncovers the page (playbook P36)
+For any sequence of phases, page statuses and overlay-opaque reports, after every step the texture is visible or the overlay is fully opaque; the overlay is opaque only when the phase is `open` and the status is idle; a turn start or leaving `open` makes the texture visible in the same step that hides the overlay; with reduced motion the fade duration is 0.
+
+**Validates: Requirements 2.2, 8.3, 9.2**
+
 ### Error Handling
 - Font fails to load: fallback stack, no message, no console output.
 - `requestPointer()` refused after close: "Click to resume" prompt (mode `lost`).
 - Project removed or no longer resting while a book is open (the existing `useReadingProject` returns null): dispatch `SKIP` then `CLOSE` so the book returns to `closed` and the pointer is requested again.
 - Edit rejected by the domain (empty description): existing inline error stays; text remains on screen and the last saved value is kept.
 - `OPEN` while another cinematic runs: ignored, no message.
+- No 2D canvas context (or texture creation fails): no leaf textures are made, the leaves keep the shared paper material, and the overlay works alone. The cross-fade model then treats the texture as never visible and the overlay shows without a fade. No message, no console output.
+- The book closes or the project disappears while the font promise is pending: the late redraw finds disposed textures and does nothing.
 
 ### Testing Strategy (book interaction)
 - Library: fast-check with Vitest; each property is a single test, at least 100 runs, tagged `Feature: graveyard-core, Property N: <title>`. Files: `bookSequence.test.ts`, `pageTurn.test.ts`, `readingMachine.test.ts`, `readingKeys.test.ts`, `bookPageLayout.test.ts`.
 - Event sequences are generated with `fc.array` of events and tick durations (including zero and above-clamp values) and checked after every step.
 - Example tests: `bookLook` constants (edge luminance at least twice the cover luminance, blue channel not below red, hue outside amber range); `pointerEdge`; one render of the page overlay.
+- Curl and leaf text (Properties 16 to 27, playbook P25 to P36): new files `leafCurl.test.ts`, `leafFaces.test.ts`, `pageCrossfade.test.ts`, plus `turningLeafIndex` in `pageTurn.test.ts`. Each property is one fast-check test with at least 100 runs, tagged `Feature: graveyard-core, Property N: <title>`. Generators: progress from `fc.double` including NaN, infinities and out-of-range values; segment counts 1 to 64; project text including empty, long, multi-line and non-Latin strings; a fixed-width fake `measure`; random event sequences for the cross-fade.
+- Example tests for the adapters, without a GPU: curl geometry buffers keep the same array identity across writes and are written only when the progress changed; the geometry and textures are created when the book leaves `closed` and `dispose` is called on each at `closed`; the shared flat geometry and shared leaf material are restored; no mesh is added (four-part contract, see above); leaf paper contrast, blue not below red, hue outside amber; canvas drawing against a fake 2D context that records calls; overlay metrics equal `PAGE_METRICS * rect.width`; the overlay shows the saved value.
+- Manual on the target machine: curl looks like paper and stays smooth, no jump at the swap from strip to flat leaf, text on the leaf matches the overlay at the cross-fade (no visible shift at 100% zoom), readable at night without amber, texture upload cost on the first open, font swap redraw.
 - Smoke: font files and `OFL.txt` exist, `docs/ASSETS.md` lists them.
 - Manual on the target machine: sequence timing and smoothness, no stutter on first open, cursor shapes, Escape refusal then "Click to resume", font fallback by renaming the font file once.
 - PBT does not apply to: rendering, CSS cursors, Pointer Lock browser behavior, per-frame allocation (checked by profiling).
@@ -361,4 +517,4 @@ Zustand store with a localStorage adapter, versioned JSON, debounced autosave, e
 A non-3D view of the grimoire exposing all create, read, edit, resurrect, honor, export and import functions. Used as a fallback and as a low-end path.
 
 ## Testing strategy
-Unit tests for domain functions. Property-based tests (fast-check) for the invariants and for export/import round trips. Manual performance checks on the target low-end machine at each milestone. The book interaction properties (task 5.3) are listed in "Book interaction (task 5.3)".
+Unit tests for domain functions. Property-based tests (fast-check) for the invariants and for export/import round trips. Manual performance checks on the target low-end machine at each milestone. The book interaction properties (task 5.3, Properties 1 to 27, including the curved page turn and the leaf text) are listed in "Book interaction (task 5.3)".
