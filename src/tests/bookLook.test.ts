@@ -9,7 +9,31 @@ function luminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-const LOOK_COLORS = [COLORS.bookCover, COLORS.bookSpine, BOOK_LOOK.pageEdge, BOOK_LOOK.coverBorder, BOOK_LOOK.rim];
+const LEAF_COLORS = [
+  BOOK_LOOK.leafPaper,
+  BOOK_LOOK.leafInk,
+  BOOK_LOOK.leafMuted,
+  BOOK_LOOK.fieldFill,
+  BOOK_LOOK.fieldBorder,
+  BOOK_LOOK.buttonFill,
+  BOOK_LOOK.buttonText,
+  BOOK_LOOK.buttonBorder,
+];
+
+const LOOK_COLORS = [
+  COLORS.bookCover,
+  COLORS.bookSpine,
+  BOOK_LOOK.pageEdge,
+  BOOK_LOOK.coverBorder,
+  BOOK_LOOK.rim,
+  ...LEAF_COLORS,
+];
+
+/** WCAG contrast ratio between two hex colors. */
+function contrast(a: string, b: string): number {
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+  return (light + 0.05) / (dark + 0.05);
+}
 
 describe('bookLook colors', () => {
   it('makes the page edge at least twice as bright as the cover', () => {
@@ -29,6 +53,17 @@ describe('bookLook colors', () => {
       const degrees = h * 360;
       expect(degrees < 20 || degrees > 50, hex).toBe(true);
     }
+  });
+
+  it('keeps the leaf colors as specified', () => {
+    expect(LEAF_COLORS).toEqual(['#c3ccdb', '#141c30', '#3a4766', '#dde3ee', '#5a6a84', '#1d2740', '#c8d8ff', '#3b4d73']);
+  });
+
+  it('reads at least 7:1 for ink on paper and on a field, and for the button text', () => {
+    expect(contrast(BOOK_LOOK.leafInk, BOOK_LOOK.leafPaper)).toBeGreaterThanOrEqual(7);
+    expect(contrast(BOOK_LOOK.leafInk, BOOK_LOOK.fieldFill)).toBeGreaterThanOrEqual(7);
+    expect(contrast(BOOK_LOOK.buttonText, BOOK_LOOK.buttonFill)).toBeGreaterThanOrEqual(7);
+    expect(contrast(BOOK_LOOK.leafMuted, BOOK_LOOK.leafPaper)).toBeGreaterThanOrEqual(4.5);
   });
 
   it('keeps the rim low', () => {

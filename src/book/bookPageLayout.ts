@@ -20,7 +20,7 @@ export interface PageDescriptor {
   resurrectButton?: ResurrectButton;
 }
 
-type PageProject = Pick<
+export type PageProject = Pick<
   Project,
   'title' | 'buriedAt' | 'abandonReason' | 'description' | 'nextAction' | 'reducedVersion'
 >;

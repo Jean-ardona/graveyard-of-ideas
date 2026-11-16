@@ -10,9 +10,22 @@ import { COLORS } from '../world/config';
 export const BOOK_LOOK = {
   /** Pale blue-gray band of the page edges; clearly lighter than the cover. */
   pageEdge: '#b7c0cf',
-  /** Pale parchment blue-gray of the leaves, the color of the page overlay. */
-  leaf: '#c3ccdb',
+  /** Pale parchment blue-gray of the leaves, the color of the page overlay and of the leaf textures. */
+  leafPaper: '#c3ccdb',
+  /** Text on the leaves. */
+  leafInk: '#141c30',
+  /** Secondary text, such as the page caption. */
+  leafMuted: '#3a4766',
+  /** Background and border of a text field on the page. */
+  fieldFill: '#dde3ee',
+  fieldBorder: '#5a6a84',
+  /** The resurrection button and the close button. */
+  buttonFill: '#1d2740',
+  buttonText: '#c8d8ff',
+  buttonBorder: '#3b4d73',
   leafGlowIntensity: 0.4,
+  /** Emissive strength of the textured front face of a leaf; tuned on the target machine. */
+  leafTextureGlowIntensity: 0.25,
   /** One-line border drawn on the front board. */
   coverBorder: '#5f7298',
   /** Emissive tint of the page edges and the cover border. */
@@ -73,9 +86,9 @@ export function createCoverMaterial(map: THREE.Texture): THREE.MeshStandardMater
 /** Leaf face: close to the overlay page color, so the open book never flashes gray-blue. */
 export function createLeafMaterial(): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
-    color: BOOK_LOOK.leaf,
+    color: BOOK_LOOK.leafPaper,
     roughness: 1,
-    emissive: BOOK_LOOK.leaf,
+    emissive: BOOK_LOOK.leafPaper,
     emissiveIntensity: BOOK_LOOK.leafGlowIntensity,
   });
 }

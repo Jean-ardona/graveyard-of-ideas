@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Quaternion, Vector3 } from 'three';
 import type { Camera, Mesh, Object3D } from 'three';
+import type { Project } from '../domain';
 import { getPointerMode, releasePointer, requestPointer, subscribePointerMode } from '../interaction/pointerLock';
 import { appStore } from '../store/appStore';
 import { backBoardAngle } from './backClose';
@@ -23,6 +24,13 @@ import {
   writeLeafCurl,
 } from './leafCurlMesh';
 import type { LeafCurlMesh } from './leafCurlMesh';
+import {
+  closeLeafTextures,
+  crossfadeStatus,
+  openLeafTextures,
+  setLeafProject,
+  syncLeafTextures,
+} from './leafTextureLayer';
 import { isIdle, leafAngle, renderedLeafAngle } from './pageTurn';
 import { closeBook, getReadingProjectId } from './readingBook';
 import { readingMachine } from './readingMachine';
@@ -133,6 +141,11 @@ function syncCurl(handle: BookHandle, cover: number): number {
   return wanted;
 }
 
+/** The saved project of a book, or null when it is gone. */
+function savedProject(id: string): Project | null {
+  return appStore.getState().data.projects.find((project) => project.id === id) ?? null;
+}
+
 /** Returns the flat geometry to any curled leaf, then frees the curl geometry. */
 function releaseCurl(): void {
   if (curlMesh === null) return;
@@ -228,6 +241,7 @@ export default function BookSequenceDriver() {
         if (active.current) {
           captureReadingPose(active.current, camera);
           curlMesh = createLeafCurlMesh();
+          openLeafTextures(active.current.leaves.map(leafMesh), id === null ? null : savedProject(id));
         }
       }
       wasClosed = closed;
@@ -244,11 +258,22 @@ export default function BookSequenceDriver() {
         projectPageRect(active.current, camera, sizeRef.current.width, sizeRef.current.height);
       }
       wasOpen = open;
+      if (!closed) {
+        const reducedMotion = appStore.getState().data.prefs.reducedMotion;
+        syncLeafTextures(readingMachine.phase(), crossfadeStatus(readingMachine.pages, reducedMotion), reducedMotion);
+      }
       if (closed) {
         active.current = null;
         clearPageRect();
         releaseCurl();
+        closeLeafTextures();
       }
+    });
+
+    // A saved edit reaches the leaf texture; it is drawn only while the texture shows, once per change.
+    const unsubscribeStore = appStore.subscribe(() => {
+      const id = getReadingProjectId();
+      if (id !== null) setLeafProject(savedProject(id));
     });
 
     // Escape leaves Pointer Lock without a key event: the lost lock reverses the opening.
@@ -259,7 +284,9 @@ export default function BookSequenceDriver() {
     return () => {
       unsubscribeMachine();
       unsubscribePointer();
+      unsubscribeStore();
       releaseCurl();
+      closeLeafTextures();
     };
   }, [camera]);
 

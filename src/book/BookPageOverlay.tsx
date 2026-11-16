@@ -1,10 +1,14 @@
 import { useRef } from 'react';
-import type { CSSProperties } from 'react';
+import type { AnimationEvent, CSSProperties, TransitionEvent } from 'react';
 import type { Project } from '../domain';
-import { BOOK_FONT_STACK } from './bookFonts';
+import { useAppStore } from '../store/appStore';
+import { BOOK_BODY_STACK, BOOK_FONT_STACK } from './bookFonts';
+import { BOOK_LOOK } from './bookLook';
 import { layoutPages } from './bookPageLayout';
-import { PAGE_FADE_SECONDS } from './bookTimings';
 import FieldEditor from './FieldEditor';
+import { PAGE_METRICS, PAGE_REFERENCE_WIDTH_PX, pageCaption } from './leafFaces';
+import { reportOverlayOpaque } from './leafTextureLayer';
+import { crossfadeSeconds } from './pageCrossfade';
 import { mirrorPageRect, usePageRect } from './pageRect';
 import type { PageRect } from './pageRect';
 import { END_INDEX, PAGE_COUNT, zoneAction } from './pageTurn';
@@ -17,45 +21,65 @@ const LAYER_STYLE: CSSProperties = { position: 'fixed', inset: 0, pointerEvents:
 /** Used until the driver has projected the page: the right half of the window. */
 const FALLBACK_RECT: CSSProperties = { left: '50%', top: '7vh', width: 'min(480px, 46vw)', height: '86vh' };
 
-const CONTENT_STYLE: CSSProperties = {
-  boxSizing: 'border-box',
-  width: '100%',
-  height: '100%',
-  overflowY: 'auto',
-  padding: '6% 7%',
-  background: '#c3ccdb',
-  color: '#141c30',
-  fontFamily: 'serif',
-  fontSize: '16px',
-  /** Fades the page in the moment it mounts, as soon as the cover is open (see index.html). */
-  animation: `book-page-fade-in ${PAGE_FADE_SECONDS}s ease-out`,
-};
+const M = PAGE_METRICS;
 
-const TITLE_STYLE: CSSProperties = {
-  margin: '12% 0 12px',
-  fontFamily: BOOK_FONT_STACK,
-  fontWeight: 'normal',
-  fontSize: '30px',
-  lineHeight: 1.2,
-  textAlign: 'center',
-  overflowWrap: 'anywhere',
-  display: '-webkit-box',
-  WebkitBoxOrient: 'vertical',
-  WebkitLineClamp: 3,
-  overflow: 'hidden',
-};
+/** `value` in page widths as CSS pixels, for a page `width` pixels wide. */
+function scaled(value: number, width: number): string {
+  return `${value * width}px`;
+}
 
-const BUTTON_STYLE: CSSProperties = {
-  padding: '6px 14px',
-  background: '#1d2740',
-  color: '#c8d8ff',
-  border: '1px solid #3b4d73',
-  borderRadius: '3px',
-  fontFamily: 'serif',
-  fontSize: '15px',
-};
+function contentStyle(width: number, fadeSeconds: number): CSSProperties {
+  return {
+    boxSizing: 'border-box',
+    width: '100%',
+    height: '100%',
+    overflowY: 'auto',
+    padding: `${scaled(M.paddingTop, width)} ${scaled(M.paddingX, width)}`,
+    background: BOOK_LOOK.leafPaper,
+    color: BOOK_LOOK.leafInk,
+    fontFamily: BOOK_BODY_STACK,
+    fontSize: scaled(M.bodySize, width),
+    /** Fades the page in the moment it mounts, as soon as the cover is open (see index.html). */
+    animation: fadeSeconds === 0 ? 'none' : `book-page-fade-in ${fadeSeconds}s ease-out`,
+  };
+}
 
-const CLOSE_STYLE: CSSProperties = { ...BUTTON_STYLE, position: 'fixed', top: '16px', right: '16px', pointerEvents: 'auto' };
+function titleStyle(width: number): CSSProperties {
+  return {
+    margin: `${scaled(M.titleMarginTop, width)} 0 ${scaled(M.titleMarginBottom, width)}`,
+    fontFamily: BOOK_FONT_STACK,
+    fontWeight: 'normal',
+    fontSize: scaled(M.titleSize, width),
+    lineHeight: M.titleLineHeight,
+    textAlign: 'center',
+    overflowWrap: 'anywhere',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: M.titleMaxLines,
+    overflow: 'hidden',
+  };
+}
+
+function buttonStyle(width: number): CSSProperties {
+  return {
+    padding: `${scaled(M.buttonPaddingY, width)} ${scaled(M.buttonPaddingX, width)}`,
+    background: BOOK_LOOK.buttonFill,
+    color: BOOK_LOOK.buttonText,
+    border: `${scaled(M.fieldBorder, width)} solid ${BOOK_LOOK.buttonBorder}`,
+    borderRadius: scaled(M.fieldRadius, width),
+    fontFamily: BOOK_BODY_STACK,
+    fontSize: scaled(M.buttonSize, width),
+  };
+}
+
+/** The Close button is window furniture, not part of the page, so its size does not follow the page. */
+const CLOSE_STYLE: CSSProperties = {
+  ...buttonStyle(PAGE_REFERENCE_WIDTH_PX),
+  position: 'fixed',
+  top: '16px',
+  right: '16px',
+  pointerEvents: 'auto',
+};
 
 /** Used until the driver has projected the page: the left half of the window. */
 const FALLBACK_LEFT_RECT: CSSProperties = { right: '50%', top: '7vh', width: 'min(480px, 46vw)', height: '86vh' };
@@ -84,9 +108,12 @@ interface BookPageOverlayProps {
  */
 export default function BookPageOverlay({ project, onResurrect }: BookPageOverlayProps) {
   const rect = usePageRect();
+  const pageWidth = rect === null ? PAGE_REFERENCE_WIDTH_PX : rect.width;
   const { index, status, turning, backDrag } = usePageTurnView();
   const surface = useRef<HTMLDivElement>(null);
   const leftSurface = useRef<HTMLDivElement>(null);
+  const reducedMotion = useAppStore((state) => state.data.prefs.reducedMotion);
+  const fadeSeconds = crossfadeSeconds(reducedMotion);
   const rightDrag = usePageDrag(() => surface.current?.getBoundingClientRect().width ?? 0, 'right');
   const leftDrag = usePageDrag(() => leftSurface.current?.getBoundingClientRect().width ?? 0, 'left');
 
@@ -100,6 +127,15 @@ export default function BookPageOverlay({ project, onResurrect }: BookPageOverla
   const contentVisible = !turning && !atEnd;
   const dragging = status === 'dragging' ? 'true' : undefined;
   const grab = resting ? 'true' : undefined;
+
+  // The page reached full opacity: the leaf texture may give way to the blank paper under it.
+  const reportOpaque = (event: { target: unknown; currentTarget: unknown }): void => {
+    if (contentVisible && event.target === event.currentTarget) reportOverlayOpaque();
+  };
+  const onTransitionEnd = (event: TransitionEvent<HTMLDivElement>): void => {
+    if (event.propertyName === 'opacity') reportOpaque(event);
+  };
+  const onAnimationEnd = (event: AnimationEvent<HTMLDivElement>): void => reportOpaque(event);
 
   return (
     <section role="dialog" aria-label={project.title} style={LAYER_STYLE}>
@@ -126,26 +162,41 @@ export default function BookPageOverlay({ project, onResurrect }: BookPageOverla
         <div
           data-testid="book-page-content"
           aria-hidden={atEnd ? 'true' : undefined}
+          onTransitionEnd={onTransitionEnd}
+          onAnimationEnd={onAnimationEnd}
           style={{
-            ...CONTENT_STYLE,
+            ...contentStyle(pageWidth, fadeSeconds),
             opacity: contentVisible ? 1 : 0,
             pointerEvents: contentVisible ? 'auto' : 'none',
             visibility: atEnd ? 'hidden' : 'visible',
-            transition: contentVisible ? `opacity ${PAGE_FADE_SECONDS}s ease-out` : 'none',
+            transition: contentVisible && fadeSeconds > 0 ? `opacity ${fadeSeconds}s ease-out` : 'none',
           }}
         >
-          {page.title !== undefined && <h2 style={TITLE_STYLE}>{page.title}</h2>}
+          {page.title !== undefined && <h2 style={titleStyle(pageWidth)}>{page.title}</h2>}
           {page.subtitle !== undefined && <p style={{ textAlign: 'center', margin: 0 }}>{page.subtitle}</p>}
           {page.fields.map((spec) => (
-            <FieldEditor key={`${project.id}-${spec.field}`} projectId={project.id} spec={spec} saved={spec.value} />
+            <FieldEditor
+              key={`${project.id}-${spec.field}`}
+              projectId={project.id}
+              spec={spec}
+              saved={spec.value}
+              pageWidth={pageWidth}
+            />
           ))}
           {page.resurrectButton !== undefined && (
-            <button disabled={page.resurrectButton.disabled} onClick={onResurrect} style={BUTTON_STYLE}>
+            <button disabled={page.resurrectButton.disabled} onClick={onResurrect} style={buttonStyle(pageWidth)}>
               {page.resurrectButton.label}
             </button>
           )}
-          <p style={{ textAlign: 'center', fontSize: '13px', margin: '16px 0 0', color: '#3a4766' }}>
-            Page {pageIndex + 1} of {PAGE_COUNT}
+          <p
+            style={{
+              textAlign: 'center',
+              fontSize: scaled(M.captionSize, pageWidth),
+              margin: `${scaled(M.captionMarginTop, pageWidth)} 0 0`,
+              color: BOOK_LOOK.leafMuted,
+            }}
+          >
+            {pageCaption(pageIndex)}
           </p>
         </div>
       </div>

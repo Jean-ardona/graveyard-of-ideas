@@ -4,6 +4,9 @@ export const BOOK_FONT_FAMILY = 'IM Fell English';
 /** Fallback stack: used while the font loads, and for characters outside its Latin subset. */
 export const BOOK_FONT_STACK = "'IM Fell English', 'Palatino Linotype', Palatino, Georgia, serif";
 
+/** Legible serif stack for body text, fields and buttons. Used by the page overlay and the leaf textures. */
+export const BOOK_BODY_STACK = "'Palatino Linotype', Palatino, Georgia, serif";
+
 /**
  * Starts loading the book font. Never blocks anything: callers do not need to wait, and the
  * promise always resolves, also when `document.fonts` is missing or loading fails.

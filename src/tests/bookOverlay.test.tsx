@@ -1,11 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type * as THREE from 'three';
 import BookPageOverlay from '../book/BookPageOverlay';
+import { createBookAssets } from '../book/bookAssets';
+import { createBookModel } from '../book/bookModel';
+import { closeLeafTextures, leafCrossfadeState, openLeafTextures, syncLeafTextures } from '../book/leafTextureLayer';
 import { BOOK_FONT_STACK } from '../book/bookFonts';
+import { PAGE_METRICS } from '../book/leafFaces';
+import { clearPageRect, writePageRect } from '../book/pageRect';
 import { turnPage } from '../book/readingBook';
 import { readingMachine } from '../book/readingMachine';
 import { appStore } from '../store/appStore';
 import type { Project } from '../domain';
+
+const SOURCES = import.meta.glob<string>(['../book/BookPageOverlay.tsx', '../book/FieldEditor.tsx'], {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+});
 
 const GUARD = { playerInFront: true, mode: 'exploring', pointerAllowsMovement: true, projectResting: true } as const;
 
@@ -87,6 +99,91 @@ describe('BookPageOverlay', () => {
     expect(readingMachine.phase()).toBe('closing');
 
     appStore.getState().editProject(project.id, { description: project.description });
+  });
+
+  it('sizes the page from PAGE_METRICS times the page width and uses the shared colors', () => {
+    const width = 600;
+    act(() => writePageRect(100, 40, width, 800, 100));
+    try {
+      const project = restingProject();
+      render(<BookPageOverlay project={project} />);
+      const m = PAGE_METRICS;
+      const px = (value: string): number => parseFloat(value);
+      const content = screen.getByTestId('book-page-content');
+      const heading = screen.getByRole('heading', { name: project.title });
+      expect(px(content.style.fontSize)).toBeCloseTo(m.bodySize * width, 6);
+      expect(px(content.style.paddingTop)).toBeCloseTo(m.paddingTop * width, 6);
+      expect(px(content.style.paddingLeft)).toBeCloseTo(m.paddingX * width, 6);
+      expect(px(heading.style.fontSize)).toBeCloseTo(m.titleSize * width, 6);
+      expect(px(heading.style.marginTop)).toBeCloseTo(m.titleMarginTop * width, 6);
+      expect(content.style.background).toBe('rgb(195, 204, 219)');
+      expect(content.style.color).toBe('rgb(20, 28, 48)');
+      expect(content.textContent).toContain(project.title);
+    } finally {
+      act(() => clearPageRect());
+    }
+  });
+
+  it('reports opacity 1 to the leaf textures only when the visible page finishes its fade', () => {
+    const meshes = createBookModel(createBookAssets()).leaves.map((leaf) => leaf.children[0] as THREE.Mesh);
+    const noop = (): undefined => undefined;
+    const context = { measureText: () => ({ width: 1 }), fillRect: noop, strokeRect: noop, fillText: noop };
+    const canvas = { width: 0, height: 0, getContext: () => context } as unknown as HTMLCanvasElement;
+    openLeafTextures(meshes, restingProject(), { createCanvas: () => canvas, loadFont: () => new Promise<void>(noop) });
+    try {
+      syncLeafTextures('open', 'idle', false);
+      render(<BookPageOverlay project={restingProject()} />);
+      const content = screen.getByTestId('book-page-content');
+      const end = (propertyName: string): void => {
+        const event = new Event('transitionend', { bubbles: true });
+        Object.defineProperty(event, 'propertyName', { value: propertyName });
+        act(() => {
+          content.dispatchEvent(event);
+        });
+      };
+      // Another property, or a bubbled event from a child, is not the page reaching full opacity.
+      end('transform');
+      expect(leafCrossfadeState().textureVisible).toBe(true);
+      act(() => {
+        screen.getByRole('heading').dispatchEvent(new Event('animationend', { bubbles: true }));
+      });
+      expect(leafCrossfadeState().textureVisible).toBe(true);
+      // While a leaf moves the content is hidden and a report is ignored.
+      act(() => turnPage('next'));
+      syncLeafTextures('open', 'settling', false);
+      end('opacity');
+      expect(leafCrossfadeState()).toEqual({ textureVisible: true, overlay: 'hidden' });
+      act(settleTurn);
+      syncLeafTextures('open', 'idle', false);
+      expect(leafCrossfadeState().overlay).toBe('fading');
+      end('opacity');
+      expect(leafCrossfadeState()).toEqual({ textureVisible: false, overlay: 'opaque' });
+    } finally {
+      closeLeafTextures();
+    }
+  });
+
+  it('shows the page at full opacity at once, with no fade, when reduced motion is on', () => {
+    appStore.setState((state) => ({ data: { ...state.data, prefs: { ...state.data.prefs, reducedMotion: true } } }));
+    try {
+      render(<BookPageOverlay project={restingProject()} />);
+      const content = screen.getByTestId('book-page-content');
+      expect(content.style.opacity).toBe('1');
+      expect(content.style.transition).toBe('none');
+      expect(content.style.animation).toBe('none');
+    } finally {
+      act(() => {
+        appStore.setState((state) => ({ data: { ...state.data, prefs: { ...state.data.prefs, reducedMotion: false } } }));
+      });
+    }
+  });
+
+  it('has no hex color and no bare serif in the overlay sources', () => {
+    expect(Object.keys(SOURCES)).toHaveLength(2);
+    for (const source of Object.values(SOURCES)) {
+      expect(source).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+      expect(source).not.toMatch(/['"]serif['"]/);
+    }
   });
 
   it('hides the whole overlay while the back board is dragged shut, and returns it on cancel', () => {

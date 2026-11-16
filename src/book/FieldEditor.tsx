@@ -1,19 +1,10 @@
 import { useState } from 'react';
 import { maxLengthOf } from '../domain';
 import { appStore } from '../store/appStore';
+import { BOOK_BODY_STACK } from './bookFonts';
+import { BOOK_LOOK } from './bookLook';
 import type { PageField } from './bookPageLayout';
-
-const INPUT_STYLE: React.CSSProperties = {
-  width: '100%',
-  boxSizing: 'border-box',
-  padding: '6px 8px',
-  background: '#dde3ee',
-  color: '#141c30',
-  border: '1px solid #5a6a84',
-  borderRadius: '3px',
-  fontFamily: 'serif',
-  fontSize: '16px',
-};
+import { PAGE_METRICS, PAGE_REFERENCE_WIDTH_PX } from './leafFaces';
 
 const DESCRIPTION_ERROR = 'The first page cannot be left empty. Your last saved words are kept.';
 
@@ -23,13 +14,17 @@ interface FieldEditorProps {
   projectId: string;
   spec: FieldSpec;
   saved: string;
+  /** Width of the page in CSS pixels; sizes are `PAGE_METRICS` times this. */
+  pageWidth?: number;
 }
 
 /** One text field. Each change is saved at once; text the domain rejects stays on screen but unsaved. */
-export default function FieldEditor({ projectId, spec, saved }: FieldEditorProps) {
+export default function FieldEditor({ projectId, spec, saved, pageWidth = PAGE_REFERENCE_WIDTH_PX }: FieldEditorProps) {
   const [text, setText] = useState(saved);
   const [error, setError] = useState<string | null>(null);
   const id = `book-${projectId}-${spec.field}`;
+  const m = PAGE_METRICS;
+  const size = (value: number): string => `${value * pageWidth}px`;
 
   function change(value: string): void {
     setText(value);
@@ -39,17 +34,27 @@ export default function FieldEditor({ projectId, spec, saved }: FieldEditorProps
 
   const Input = spec.multiline ? 'textarea' : 'input';
   return (
-    <div style={{ marginBottom: '14px' }}>
-      <label htmlFor={id} style={{ display: 'block', marginBottom: '4px' }}>
+    <div style={{ marginBottom: size(m.fieldGap) }}>
+      <label htmlFor={id} style={{ display: 'block', marginBottom: size(m.labelGap) }}>
         {spec.label}
       </label>
       <Input
         id={id}
         value={text}
         maxLength={maxLengthOf(spec.field)}
-        rows={spec.multiline ? 5 : undefined}
+        rows={spec.multiline ? m.multilineRows : undefined}
         onChange={(event) => change(event.target.value)}
-        style={INPUT_STYLE}
+        style={{
+          width: '100%',
+          boxSizing: 'border-box',
+          padding: `${size(m.fieldPaddingY)} ${size(m.fieldPaddingX)}`,
+          background: BOOK_LOOK.fieldFill,
+          color: BOOK_LOOK.leafInk,
+          border: `${size(m.fieldBorder)} solid ${BOOK_LOOK.fieldBorder}`,
+          borderRadius: size(m.fieldRadius),
+          fontFamily: BOOK_BODY_STACK,
+          fontSize: size(m.bodySize),
+        }}
       />
       {error !== null && spec.field === 'description' && (
         <div role="alert" style={{ fontSize: '14px', marginTop: '4px' }}>

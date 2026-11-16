@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { BOOK_FONT_STACK, ensureBookFont } from '../book/bookFonts';
+import { BOOK_BODY_STACK, BOOK_FONT_STACK, ensureBookFont } from '../book/bookFonts';
 
 const FONT_DIR = '/public/fonts/im-fell-english/';
 const FONT_FILES = Object.keys(import.meta.glob('/public/fonts/im-fell-english/*'));
@@ -51,6 +51,12 @@ describe('bookFonts', () => {
       "'IM Fell English', 'Palatino Linotype', Palatino, Georgia, serif",
     );
     expect(BOOK_FONT_STACK.endsWith('serif')).toBe(true);
+  });
+
+  it('has a legible body stack that ends in generic serif and is not the bare keyword', () => {
+    expect(BOOK_BODY_STACK).not.toBe('serif');
+    expect(BOOK_BODY_STACK.endsWith('serif')).toBe(true);
+    expect(BOOK_BODY_STACK).not.toContain('IM Fell');
   });
 
   it('resolves when document.fonts is missing', async () => {

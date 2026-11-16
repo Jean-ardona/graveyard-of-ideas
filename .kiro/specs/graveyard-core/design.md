@@ -65,7 +65,7 @@ Interaction with the book (lift, approach, open, page turning, close) is designe
 ## Book interaction (task 5.3)
 
 ### Decision and scope
-The closed book that already lies on the tomb base (task 5.2) is the interactive object. The tomb (task 5.1) is unchanged: no lid or slab animation is part of reading. The existing prompt "E - Open <name>" starts the sequence.
+The closed book that already lies on the plinth/slab front of the tomb (task 5.2, no cavity block) is the interactive object. The tomb (task 5.1) is unchanged: no lid or slab animation is part of reading. The existing prompt "E - Open <name>" starts the sequence, and it shows only when the player stands in front of the tomb (see "Corrections after 5.3.6").
 
 Superseded wording: Requirement 2.1 (slab slides open, book raised from the cavity) and 2.5 (book lowered into the cavity, slab closed) describe the old flow. The slab and cavity stay in the tomb for the burial cinematic (task 6.2). See "Open points".
 
@@ -170,7 +170,7 @@ Walking and look are locked from the moment OPEN is accepted until the book is `
 
 ### Two drag zones and closing gestures (fix after task 5.3.6)
 
-The drag side decides the action. Grab the right page and drag left to turn forward; grab the left page and drag right to turn back. The other way does nothing. On the first page the left zone closes the book and on the last page the right zone closes it, with the same 50 percent rule and no new mesh. The left zone is the projected right page mirrored around the projected spine (`mirrorPageRect`, written with the page rectangle, never per frame). `PageTurnState` gains `side`, `closeDrag` and `closeRequested`; `zoneAction(index, side)` returns `next`, `prev` or `close`. `CURL_STRENGTH` (default 0.6, in `bookTimings.ts`) scales the tip lag of `leafCurl`. Properties 28 to 32 (playbook P32 to P36): the wrong direction does nothing; next then previous returns to the same page; a closing gesture needs half the distance; no leaf is both turned and unturned; strength scales the bend.
+The drag side decides the action. Grab the right page and drag left to turn forward; grab the left page and drag right to turn back. The other way does nothing. On the first page the left zone closes the book and in the end position (after the last page) the right zone closes it, with the same 50 percent rule and no new mesh. The left zone is the projected right page mirrored around the projected spine (`mirrorPageRect`, written with the page rectangle, never per frame). `PageTurnState` gains `side`, `closeDrag` and `closeRequested`; `zoneAction(index, side)` returns `next`, `prev` or `close`. `CURL_STRENGTH` (default 0.6, in `bookTimings.ts`) scales the tip lag of `leafCurl`. Properties 28 to 32 (playbook P32 to P36): the wrong direction does nothing; next then previous returns to the same page; a closing gesture needs half the distance; no leaf is both turned and unturned; strength scales the bend.
 
 ### Cover scrub (fix after the two-zone drag fix)
 
@@ -178,28 +178,44 @@ A closing gesture scrubs the rigid cover about the spine, with no curl. The mach
 
 ### Back closing (fix after the cover scrub)
 
-The back board is a second mesh in the `pageBlock` part (same geometry as the front board, same `coverMaterial` and so the same border texture, own hinge on the spine axis behind the block). It is not a fifth part; the mesh count is now 1, 1, 2, 3. The pure `backClose.ts` models the swing of the book about the spine axis, from 0 (open) to pi (closed, back up): `backSwingAngle(openFraction, approach) = pi * (1 - openFraction) * approach`, clamped, NaN counts as open and at the reading pose. A drag from the right zone on the last page is a closing gesture (`isBackClosingGesture`); it scrubs `swing = pi * progress` and the front stack folds by the same fraction, so the leaves stay where they lie while the back half comes over them. `SequenceState` gains `side: 'front' | 'back'`, set when closing starts (`back` only from the last page, by a released gesture, the Close button, Escape or a pending close that waited for a turn). A close while the book is still opening is always `front`. `SequenceProgress` gains `swing`. No timers.
+The back board is a second mesh in the `pageBlock` part (same geometry as the front board, same `coverMaterial` and so the same border texture, own hinge on the spine axis behind the block). It is not a fifth part; the mesh count is now 1, 1, 2, 3. The pure `backClose.ts` models the swing of the book about the spine axis, from 0 (open) to pi (closed, back up): `backSwingAngle(openFraction, approach) = pi * (1 - openFraction) * approach`, clamped, NaN counts as open and at the reading pose. A drag from the right zone in the end position is a closing gesture (`isBackClosingGesture`); it scrubs `swing = pi * progress` and the front stack folds by the same fraction, so the leaves stay where they lie while the back half comes over them. `SequenceState` gains `side: 'front' | 'back'`, set when closing starts (`back` only from the end position, by a released gesture, the Close button, Escape or a pending close that waited for a turn; from the last page the last leaf is turned first, see "Corrections after 5.3.6"). A close while the book is still opening is always `front`. `SequenceProgress` gains `swing`. No timers.
 
-Release past 50 percent calls `startClosingFromCover(state, fraction, true)`: no jump, because the swing at that time equals the dragged one. The closing timeline then runs as before except that the approach step is the flip: it lasts `BACK_FLIP.seconds` (timeline rate `BACK_FLIP_RATE`), and `swing` falls from pi to 0 as the approach falls from 1 to 0, a single continuous rotation of exactly 180 degrees about the long axis. At the end `swing = 0`, `cover = 0`, `approach = 0`, `lift = 0` and the side is `front` again, which is the normal closed pose, so there is no jump.
+Release past 50 percent calls `startClosingFromCover(state, fraction, true)`: no jump, because the swing at that time equals the dragged one. The closing timeline then runs as before except that the approach step is the flip: it lasts `BACK_FLIP.seconds` = 1.6 s (timeline rate `BACK_FLIP_RATE`), and `swing` falls from pi to 0 as the approach falls from 1 to 0, a single continuous rotation of exactly 180 degrees about the long axis. At the end `swing = 0`, `cover = 0`, `approach = 0`, `lift = 0` and the side is `front` again, which is the normal closed pose, so there is no jump.
 
 The flip cannot pass through the slab or the tomb because: (1) `swing > 0` only while `approach > 0`, which is only after the lift step has finished going backwards, so the lift is at its full `LIFT_HEIGHT` for the whole flip and the descent starts only after the swing is 0; (2) the swung half only adds material on the +z side of the book (the side that is up when it lies flat), so the lowest point of the book at any swing angle is the bottom face of the closed book (tested on the real model); (3) the position moves from the reading pose toward the base along a line that starts above the base. Reduced motion skips straight to the closed pose.
 
-Overlay hidden (content and Close button, opacity 0, no pointer events) during the back drag; during the flip the overlay is not mounted, because the phase is `closing`. Properties 37 to 41 (playbook P41 to P45): the back board angle is monotonic in the drag progress and in [0, pi] for any input; release below 50 percent returns exactly to the last-page open state; release above 50 percent reaches closed back up and then the rest pose face up; the flip is one continuous rotation of exactly pi; both covers closed never coexists with a turning leaf.
+Overlay hidden (content and Close button, opacity 0, no pointer events) during the back drag; during the flip the overlay is not mounted, because the phase is `closing`. Properties 37 to 41 (playbook P41 to P45): the back board angle is monotonic in the drag progress and in [0, pi] for any input; release below 50 percent returns exactly to the end-position open state; release above 50 percent reaches closed back up and then the rest pose face up; the flip is one continuous rotation of exactly pi; both covers closed never coexists with a turning leaf.
+
+### Corrections after 5.3.6
+
+These are corrections to tasks 5.3.5 and 5.3.6, made after 5.3.6. They are not new tasks. Where an earlier subsection says otherwise, this subsection wins.
+
+1. **Front of the tomb only.** The closed book rests on the plinth/slab front of the tomb; there is no cavity block. It opens only from the front: `isInFrontOfTomb(tombPosition, tombFacing, player)` in `src/interaction/tombFront.ts` is true when the cosine between the tomb facing and the direction to the player is at least `FRONT_MIN_DOT = 0.35` (about a 70 degree half-angle). From other sides the "E - Open" prompt is hidden too.
+2. **Timings.** Lift 1.0 s, approach 1.2 s, cover 1.2 s, TOTAL 3.4 s. The back-close flip lasts `BACK_FLIP.seconds` = 1.6 s.
+3. **Two drag zones.** Right page drag left = next; left page drag right = previous. The wrong direction does nothing: no progress, no direction.
+4. **Hand-scrubbed covers.** The front cover and the back board are scrubbed by the hand. A release at or past 50 percent completes the close; below 50 percent it returns.
+5. **End position.** After the last page the book rests at `END_INDEX = PAGE_COUNT` (3). `index` runs 0..`END_INDEX`; every leaf is turned and the inside of the back board shows on the right. It has no content (blank paper). A right-zone drag there is the back-closing gesture (back-close and the 180 degree flip, so the book lands face up on its base); the left zone goes back to the last page. Next from the last page reaches the end position, and next from the end position does nothing.
+6. **Closing from the last page.** Close, the Close button and Escape from the last page first turn the last leaf (automatic turn to the end position), then run the back-close. From the end position they run the back-close directly. From any earlier page they run the front close.
+7. **Curl strength.** `CURL_STRENGTH` (0 to 1, default 0.6, in `bookTimings.ts`) scales the bend (tip lag) of `leafCurl`.
+8. **Stacking of the leaves (`src/book/bookStack.ts`).** Unturned leaves stack on the right with page 1 on top (`restLeafZ`). Turned leaves lie on the left above the inner face of the open cover, the later turned leaf higher (`turnedLeafZ`, `TURNED_GAP = 0.001`). Each turned leaf lies steeper than the previous one by `LEAF_FAN = 0.01` rad (`turnedLeafAngle`), so no two planes coincide. While folding with the cover, later leaves trail it (`LEAF_FOLD_LAG = 0.08`, `leafCoverProgress`).
+
+New properties from these corrections: design Properties 28 to 41 are described in the subsections above (playbook P32 to P45). Design Properties 42 to 46 (playbook P46 to P50) cover the end position and are written in the Correctness Properties section.
+
 ### Page-turn model (`pageTurn.ts`)
 ```ts
 interface PageTurnState {
-  index: number;                       // current page, 0..PAGE_COUNT-1 (PAGE_COUNT = 3)
+  index: number;                       // current position, 0..END_INDEX (PAGE_COUNT = 3, END_INDEX = 3)
   status: 'idle' | 'dragging' | 'settling';
   direction: 'next' | 'prev' | null;
   progress: number;                    // 0..1 completion of the turn in progress
   settleTarget: 0 | 1;
 }
 ```
-Leaf `j` carries page `j` on its front. A turning leaf rotates rigidly about the spine axis, 0 to 180 degrees. Turning leaf `index` forward reveals page `index + 1` on the right; the left side shows the back of the turned leaf (blank parchment). The last leaf never turns forward.
+Leaf `j` carries page `j` on its front. A turning leaf rotates rigidly about the spine axis, 0 to 180 degrees. Turning leaf `index` forward reveals page `index + 1` on the right; the left side shows the back of the turned leaf (blank parchment). Turning the last leaf forward reveals the end position (`index = END_INDEX`), which shows the inside of the back board, blank. Nothing turns forward from the end position.
 
 Functions (all take the state, mutate it in place): `beginDrag`, `dragTo(state, dxPx, pageWidthPx)`, `endDrag`, `cancelDrag`, `turnByKey(state, 'next' | 'prev')`, `tick(state, dt)`, `isIdle`, `leafAngle(state, j)`.
 
-- Direction is set when `|dx| >= deadzonePx`: drag left means `next`, drag right means `prev`. If that direction does not exist (first page, last page) the drag is ignored. Direction is locked for the rest of the drag; dragging back past the start just gives progress 0.
+- Direction is set when `|dx| >= deadzonePx`: drag left means `next`, drag right means `prev`. If that direction does not exist (`prev` on the first page, `next` in the end position) the drag is ignored. The drag zone also decides: see "Two drag zones and closing gestures". Direction is locked for the rest of the drag; dragging back past the start just gives progress 0.
 - `progress = clamp(|dx| / (pageWidthPx * fullTurnRatio), 0, 1)` in the locked direction. The angle follows the pointer one to one.
 - `endDrag`: `progress >= 0.5` settles to 1 (turn completes, `index` changes by one); `progress < 0.5` settles to 0 (returns). Exactly 0.5 completes.
 - `cancelDrag` (Escape during drag, `pointercancel`, window blur) always settles to 0.
@@ -219,7 +235,9 @@ Allocation: three leaf meshes share one geometry and one material; the driver wr
 |---|---|---|
 | 1 | Project name (ancient font), "Buried on <date>" | `title`, `buriedAt` formatted with `Intl.DateTimeFormat('en', { dateStyle: 'long' })`; line omitted if no date |
 | 2 | "Why it rests" (editable), "The idea in one line" (editable) | `abandonReason`, `description` |
-| 3 | "Realistic next action" (editable), resurrection button | `nextAction` |
+| 3 | "Realistic next action" (editable), "A smaller version (optional)" (editable, optional), resurrection button | `nextAction`, `reducedVersion` |
+
+`goal`, `epitaph` and `notes` have no page; they stay editable in the grimoire (task 8.1).
 
 The resurrection button is rendered disabled until task 7 passes an `onResurrect` handler; the rule "next action required" belongs to task 7.1. Edits keep using `editProject` through `FieldEditor` (autosave, unchanged).
 
@@ -308,9 +326,13 @@ phi[i] = pi * s - tipLag * sin(pi * s) * w[i],   w[i] = i / (segments - 1)   // 
 
 ### Text on the 3D leaves
 
-Page text is drawn onto the faces of the leaves so it turns with the paper. The HTML overlay stays the editable layer when the page is at rest; the texture is what shows during a turn and while the cover opens and closes.
+Page text is drawn onto the front face of each leaf so it turns with the paper. The HTML overlay stays the editable layer when the page is at rest; the texture is what shows during a turn and while the cover opens and closes.
 
-**Which text goes where (`leafFaces.ts`, pure).** `leafFaces(project, hasResurrectHandler, measure)` calls `layoutPages` and returns, for each of the three leaves, `{ front: DrawOp[], back: DrawOp[] }`. Front of leaf `j` is page `j`; every back is empty (blank parchment, as in the page model). So the content rules of `layoutPages` (never goal, epitaph or notes) apply unchanged. Coordinates and sizes are in page-width units (1 = width of the page face), so the same ops serve any pixel size.
+**Decision: front faces only.** Text is drawn on the front face of each leaf only (front of leaf `j` is page `j` from `layoutPages`). Back faces and the end position stay blank paper: there is no text on any back face and no content on the end position. The page model, the HTML overlay and invariants I1 to I6 are unchanged.
+
+**Considered and deferred: real-book faces.** Text on both faces of a leaf, two pages per spread, and editable fields on the left page too were considered. They moved to `docs/POLISH_BACKLOG.md` as a possible later improvement, because they require changing the page model (`pageTurn` index semantics, the properties related to I1 to I6, and a second overlay layer).
+
+**Which text goes where (`leafFaces.ts`, pure).** `leafFaces(project, hasResurrectHandler, measure)` calls `layoutPages` and returns, for each of the three leaves, `{ front: DrawOp[], back: DrawOp[] }`. Front of leaf `j` is page `j`; every `back` is an empty array (blank parchment, as in the page model). No ops exist for the end position: it is not a leaf face and has no content. So the content rules of `layoutPages` (never goal, epitaph or notes) apply unchanged. Coordinates and sizes are in page-width units (1 = width of the page face), so the same ops serve any pixel size.
 ```ts
 type FontRole = 'title' | 'body';
 type TextMeasure = (text: string, size: number, font: FontRole) => number;  // width in page-width units
@@ -402,7 +424,7 @@ For any total duration split into random clamped `dt` values, the sequence reach
 **Validates: Requirements 2.1, 8.3**
 
 #### Property 9: Page model invariants
-For any sequence of drag, release, cancel, key and tick events, `index` stays in [0, 2], `progress` in [0, 1], every leaf angle in [0, pi]; `idle` implies `progress = 0` and `direction = null`; `next` implies `index < 2`, `prev` implies `index > 0`; and the turned leaves always form a prefix (angles are non-increasing with `j` when idle).
+For any sequence of drag, release, cancel, key and tick events, `index` stays in [0, `END_INDEX`], `progress` in [0, 1], every leaf angle in [0, pi]; `idle` implies `progress = 0` and `direction = null`; `next` implies `index < END_INDEX`, `prev` implies `index > 0`; and the turned leaves always form a prefix (angles are non-increasing with `j` when idle).
 
 **Validates: Requirements 2.2**
 
@@ -412,7 +434,7 @@ For any page, direction and drag distance, ending the drag with `progress >= 0.5
 **Validates: Requirements 2.2**
 
 #### Property 11: Keyboard turning
-For any page, `turnByKey('next')` then ticking to idle moves `index` up by one unless on the last page, where nothing changes; `'prev'` mirrors this; `next` then `prev` returns to the starting page; the result equals a completed drag in the same direction.
+For any page, `turnByKey('next')` then ticking to idle moves `index` up by one unless in the end position, where nothing changes (from the last page it reaches the end position); `'prev'` mirrors this; `next` then `prev` returns to the starting page; the result equals a completed drag in the same direction.
 
 **Validates: Requirements 2.2**
 
@@ -427,7 +449,7 @@ For any state and leaf, the rendered angle `leafAngle * cover` is 0 when `cover 
 **Validates: Requirements 2.5**
 
 #### Property 14: Page layout shows the required content
-For any resting project, the descriptors contain the title on page 1, the burial date when present, the reason and idea on page 2, and the next-action field and a resurrection button on page 3; the button is disabled when no handler is given.
+For any resting project, the descriptors contain the title on page 1, the burial date when present, the reason and idea on page 2, and the next-action field, the reduced version field and a resurrection button on page 3; the button is disabled when no handler is given. No page holds the goal, the epitaph or the notes.
 
 **Validates: Requirements 2.3, 2.4**
 
@@ -436,7 +458,7 @@ For any key, typing flag and phase, Escape maps to `CLOSE` in every phase except
 
 **Validates: Requirements 2.6**
 
-The next properties cover the curved page turn and the text on the leaves. Playbook numbering continues the rule: design property N is playbook P(N+9), so Properties 16 to 27 are P25 to P36.
+The next properties cover the curved page turn and the text on the leaves. Playbook numbering: design property N is playbook P(N+9) for Properties 16 to 22 (P25 to P31). Properties 23 to 27 (leaf text and cross-fade) were planned as P32 to P36, but the corrections after 5.3.6 took P32 to P50, so they moved to the next free numbers: Property 23 is P51, 24 is P52, 25 is P53, 26 is P54 and 27 is P55.
 
 #### Property 16: The leaf is flat at the ends (playbook P25)
 For any segment count from 1 to 64, `leafCurl` at progress 0 gives every segment angle 0, and at progress 1 gives every segment angle pi; the strip positions at 0 and 1 equal the flat leaf (points along the line at angle 0, and angle pi) within tolerance.
@@ -471,32 +493,59 @@ For any sequence of progress values (a drag forward, back and forward again, or 
 #### Property 22: Only the turning leaf is deformed (playbook P31)
 For any page-turn state, `turningLeafIndex` is `null` when the state is idle; otherwise it is the only leaf whose angle lies strictly between 0 and pi, and the leaf fraction passed to `leafCurl` equals that leaf's angle divided by pi. No leaf is curled when the cover progress is below 1 or reduced motion is on.
 
-**Validates: Requirements 2.2, 8.3, 9.2**
+**Validates: Requirements 2.2, 8.3**
 
-#### Property 23: Each page goes on its own leaf face (playbook P32)
-For any project and any handler flag, the front ops of leaf `j` contain exactly the text of page `j` from `layoutPages` (title, date, labels, saved values, button label, caption) and no text of another page; every back face has no text ops; no goal, epitaph or notes text appears on any face.
+#### Property 23: Each page goes on its own leaf face (playbook P51)
+For any project and any handler flag, the front ops of leaf `j` contain exactly the text of page `j` from `layoutPages` (title, date, labels, saved values, button label, caption; the front ops of page 3 include the reduced version field) and no text of another page; every back face has no ops (an empty array); the end position has no content and no ops; no goal, epitaph or notes text appears on any face.
 
 **Validates: Requirements 2.3, 2.4, 9.2**
 
-#### Property 24: Wrapped lines fit the page (playbook P33)
+#### Property 24: Wrapped lines fit the page (playbook P52)
 For any text, any width and any measure function with a positive width per character, every wrapped line is no wider than the width unless it is a single character; the lines before any clipping keep every non-whitespace character in order; the line count never exceeds the limit; an ellipsis appears only when text was clipped.
 
 **Validates: Requirements 2.3**
 
-#### Property 25: The face key tracks the drawn text (playbook P34)
+#### Property 25: The face key tracks the drawn text (playbook P53)
 For any two projects, the face key of a leaf is equal exactly when the ops of that leaf are equal; changing any drawn text changes the key of its leaf and no other leaf's key; the same project always gives the same key.
 
 **Validates: Requirements 2.4, 9.2**
 
-#### Property 26: The texture size fits the limit and keeps the aspect (playbook P35)
+#### Property 26: The texture size fits the limit and keeps the aspect (playbook P54)
 For any positive face width and height and any positive limit, the texture width and height are integers of at least 1, do not exceed the limit, and the aspect ratio differs from the face aspect by at most one texel of rounding; the default limit is 512 by 768.
 
 **Validates: Requirements 8.2**
 
-#### Property 27: The cross-fade never uncovers the page (playbook P36)
+#### Property 27: The cross-fade never uncovers the page (playbook P55)
 For any sequence of phases, page statuses and overlay-opaque reports, after every step the texture is visible or the overlay is fully opaque; the overlay is opaque only when the phase is `open` and the status is idle; a turn start or leaving `open` makes the texture visible in the same step that hides the overlay; with reduced motion the fade duration is 0.
 
-**Validates: Requirements 2.2, 8.3, 9.2**
+**Validates: Requirements 2.2, 8.3**
+
+Properties 28 to 41 (two drag zones, cover scrub, back closing; playbook P32 to P45) are described in their subsections above. Properties 42 to 46 cover the end position and are written here (playbook P46 to P50, design property N is P(N+4)).
+
+#### Property 42: Next reaches the end position and stops there (playbook P46)
+For any page-model state on the last page, a `next` by key or by a drag from the right zone released at or past 50 percent leaves the model idle at `END_INDEX` with every leaf turned; for any state at `END_INDEX`, `next` by key changes nothing, and a drag from the right zone is a closing gesture, not a turn.
+
+**Validates: Requirements 2.2**
+
+#### Property 43: Previous from the end position returns to the last page (playbook P47)
+For any state at `END_INDEX`, `prev` by key or by a drag from the left zone released at or past 50 percent ends idle on the last page, with the leaves before it still turned and the last leaf unturned; `next` then returns to `END_INDEX`.
+
+**Validates: Requirements 2.2**
+
+#### Property 44: The back board is never closed while a leaf is unturned (playbook P48)
+For any sequence of open, skip, close, key, drag and tick events, whenever the swing is pi, the dragged back board is at pi, or a back closing is running, every leaf angle is pi.
+
+**Validates: Requirements 2.5, 2.6**
+
+#### Property 45: Close from the last page turns the last leaf first (playbook P49)
+For any close event from the last page, the book stays `open` until the automatic turn has landed, then closes from the open pose with no jump (`t = TOTAL`, cover 1, swing 0); every leaf is turned during the whole closing; it ends `closed` with all progress 0, side `front` and a fresh page model.
+
+**Validates: Requirements 2.5, 2.6**
+
+#### Property 46: Close from the end position equals the back close (playbook P50)
+For any close event from `END_INDEX`, the sequence of phase, `t`, swing and cover equals the pure back close started from the open pose.
+
+**Validates: Requirements 2.5, 2.6**
 
 ### Error Handling
 - Font fails to load: fallback stack, no message, no console output.
@@ -511,7 +560,7 @@ For any sequence of phases, page statuses and overlay-opaque reports, after ever
 - Library: fast-check with Vitest; each property is a single test, at least 100 runs, tagged `Feature: graveyard-core, Property N: <title>`. Files: `bookSequence.test.ts`, `pageTurn.test.ts`, `readingMachine.test.ts`, `readingKeys.test.ts`, `bookPageLayout.test.ts`.
 - Event sequences are generated with `fc.array` of events and tick durations (including zero and above-clamp values) and checked after every step.
 - Example tests: `bookLook` constants (edge luminance at least twice the cover luminance, blue channel not below red, hue outside amber range); `pointerEdge`; one render of the page overlay.
-- Curl and leaf text (Properties 16 to 27, playbook P25 to P36): new files `leafCurl.test.ts`, `leafFaces.test.ts`, `pageCrossfade.test.ts`, plus `turningLeafIndex` in `pageTurn.test.ts`. Each property is one fast-check test with at least 100 runs, tagged `Feature: graveyard-core, Property N: <title>`. Generators: progress from `fc.double` including NaN, infinities and out-of-range values; segment counts 1 to 64; project text including empty, long, multi-line and non-Latin strings; a fixed-width fake `measure`; random event sequences for the cross-fade.
+- Curl and leaf text (Properties 16 to 27, playbook P25 to P31 and P51 to P55): new files `leafCurl.test.ts`, `leafFaces.test.ts`, `pageCrossfade.test.ts`, plus `turningLeafIndex` in `pageTurn.test.ts`. Each property is one fast-check test with at least 100 runs, tagged `Feature: graveyard-core, Property N: <title>`. Generators: progress from `fc.double` including NaN, infinities and out-of-range values; segment counts 1 to 64; project text including empty, long, multi-line and non-Latin strings; a fixed-width fake `measure`; random event sequences for the cross-fade.
 - Example tests for the adapters, without a GPU: curl geometry buffers keep the same array identity across writes and are written only when the progress changed; the geometry and textures are created when the book leaves `closed` and `dispose` is called on each at `closed`; the shared flat geometry and shared leaf material are restored; no mesh is added (four-part contract, see above); leaf paper contrast, blue not below red, hue outside amber; canvas drawing against a fake 2D context that records calls; overlay metrics equal `PAGE_METRICS * rect.width`; the overlay shows the saved value.
 - Manual on the target machine: curl looks like paper and stays smooth, no jump at the swap from strip to flat leaf, text on the leaf matches the overlay at the cross-fade (no visible shift at 100% zoom), readable at night without amber, texture upload cost on the first open, font swap redraw.
 - Smoke: font files and `OFL.txt` exist, `docs/ASSETS.md` lists them.
@@ -519,8 +568,8 @@ For any sequence of phases, page statuses and overlay-opaque reports, after ever
 - PBT does not apply to: rendering, CSS cursors, Pointer Lock browser behavior, per-frame allocation (checked by profiling).
 
 ### Open points
-1. Requirements 2.1, 2.3 and 2.5 still describe the slab flow and the four content parts. A later session should update `requirements.md`.
-2. The three pages do not show `goal`, `epitaph`, `notes` and `reducedVersion`, which the 5.2 book edited under four tabs. They stay editable in the grimoire (task 8.1). Decide whether page 3 should also hold the optional reduced version (Req 5.1).
+1. Requirements 2.1, 2.3 and 2.5 still describe the slab flow and the four content parts. Their wording is left to task 5.3.9, where the user reviews it.
+2. Decided: page 3 holds `reducedVersion` next to the next action and the resurrection button (Req 5.1). `goal`, `epitaph` and `notes` stay in the grimoire (task 8.1) and have no page.
 3. "The idea in one line" is bound to `description`. Change `bookPageLayout.ts` if another field is intended.
 4. Final font choice among the three candidates (default: IM Fell English).
 
@@ -534,4 +583,4 @@ Zustand store with a localStorage adapter, versioned JSON, debounced autosave, e
 A non-3D view of the grimoire exposing all create, read, edit, resurrect, honor, export and import functions. Used as a fallback and as a low-end path.
 
 ## Testing strategy
-Unit tests for domain functions. Property-based tests (fast-check) for the invariants and for export/import round trips. Manual performance checks on the target low-end machine at each milestone. The book interaction properties (task 5.3, Properties 1 to 41, including the curved page turn, the leaf text, the cover scrub and the back closing) are listed in "Book interaction (task 5.3)".
+Unit tests for domain functions. Property-based tests (fast-check) for the invariants and for export/import round trips. Manual performance checks on the target low-end machine at each milestone. The book interaction properties (task 5.3, Properties 1 to 46, including the curved page turn, the leaf text, the two drag zones, the cover scrub, the back closing and the end position) are listed in "Book interaction (task 5.3)".

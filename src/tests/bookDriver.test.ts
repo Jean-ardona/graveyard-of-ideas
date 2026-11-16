@@ -31,6 +31,18 @@ describe('BookSequenceDriver source', () => {
     expect(driverSource).toMatch(/^const \w+ = new Quaternion\(\);$/m);
   });
 
+  it('makes the leaf textures when the book leaves closed and disposes them where the curl is released', () => {
+    expect(driverSource).toMatch(/wasClosed && !closed[\s\S]*?createLeafCurlMesh\(\);\s*openLeafTextures\(/);
+    expect(driverSource).toMatch(/if \(closed\) \{[\s\S]*?releaseCurl\(\);\s*closeLeafTextures\(\);/);
+    expect(driverSource.match(/openLeafTextures\(/g)).toHaveLength(1);
+    expect(driverSource).toMatch(/return \(\) => \{[\s\S]*?closeLeafTextures\(\);/);
+  });
+
+  it('hands the page between texture and overlay from the machine listener, not from the frame', () => {
+    expect(driverSource).toMatch(/syncLeafTextures\(readingMachine\.phase\(\), crossfadeStatus\(/);
+    expect(callback).not.toMatch(/LeafTextures|setLeafProject|crossfade/i);
+  });
+
   it('does no work while closed or open with idle pages', () => {
     expect(callback).toMatch(/phase === 'closed'/);
     expect(callback).toMatch(/phase === 'open' && isIdle\(/);
