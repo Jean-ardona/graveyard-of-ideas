@@ -1,10 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { Color } from 'three';
 import type * as THREE from 'three';
 import BookPageOverlay from '../book/BookPageOverlay';
 import { createBookAssets } from '../book/bookAssets';
+import { BOOK_LOOK } from '../book/bookLook';
 import { createBookModel } from '../book/bookModel';
-import { closeLeafTextures, leafCrossfadeState, openLeafTextures, syncLeafTextures } from '../book/leafTextureLayer';
+import {
+  closeLeafTextures,
+  leafCrossfadeState,
+  leafTexturesInUse,
+  openLeafTextures,
+  syncLeafTextures,
+} from '../book/leafTextureLayer';
 import { BOOK_FONT_STACK } from '../book/bookFonts';
 import { PAGE_METRICS } from '../book/leafFaces';
 import { clearPageRect, writePageRect } from '../book/pageRect';
@@ -116,11 +124,60 @@ describe('BookPageOverlay', () => {
       expect(px(content.style.paddingLeft)).toBeCloseTo(m.paddingX * width, 6);
       expect(px(heading.style.fontSize)).toBeCloseTo(m.titleSize * width, 6);
       expect(px(heading.style.marginTop)).toBeCloseTo(m.titleMarginTop * width, 6);
-      expect(content.style.background).toBe('rgb(195, 204, 219)');
+      expect(content.style.background).toBe('transparent');
       expect(content.style.color).toBe('rgb(20, 28, 48)');
       expect(content.textContent).toContain(project.title);
     } finally {
       act(() => clearPageRect());
+    }
+  });
+
+  it('has no paper, border, shadow or radius of its own, so the leaf paper is the only sheet', () => {
+    render(<BookPageOverlay project={restingProject()} />);
+    const containers = [
+      screen.getByTestId('book-page-content'),
+      screen.getByTestId('book-right-zone'),
+      screen.getByTestId('book-left-zone'),
+    ];
+    for (const element of containers) {
+      expect(element.style.backgroundColor).not.toMatch(/^(#|rgb)/);
+      expect(element.style.boxShadow).not.toMatch(/\d/);
+      expect(element.style.border).not.toMatch(/\d/);
+      expect(element.style.borderRadius).toMatch(/^(0(px)?)?$/);
+      expect(element.style.outline).not.toMatch(/\d/);
+    }
+    expect(containers[0]!.style.background).toBe('transparent');
+  });
+
+  it('paints the blank leaf, the leaf texture and its glow from the one paper token', () => {
+    const assets = createBookAssets();
+    const leaf = assets.leafMaterial as THREE.MeshStandardMaterial;
+    expect(leaf.color.getHexString()).toBe(new Color(BOOK_LOOK.leafPaper).getHexString());
+    const paper = new Color(BOOK_LOOK.leafPaper);
+    expect(leaf.color.equals(paper)).toBe(true);
+    expect(leaf.emissive.equals(paper)).toBe(true);
+    expect(leaf.emissiveIntensity).toBe(BOOK_LOOK.leafGlowIntensity);
+
+    const meshes = createBookModel(assets).leaves.map((item) => item.children[0] as THREE.Mesh);
+    const noop = (): undefined => undefined;
+    const fills: string[] = [];
+    const context = {
+      measureText: () => ({ width: 1 }),
+      fillRect: noop,
+      strokeRect: noop,
+      fillText: noop,
+      set fillStyle(value: string) {
+        fills.push(value);
+      },
+    };
+    const canvas = { width: 0, height: 0, getContext: () => context } as unknown as HTMLCanvasElement;
+    openLeafTextures(meshes, restingProject(), { createCanvas: () => canvas, loadFont: () => new Promise<void>(noop) });
+    try {
+      expect(fills[0]).toBe(BOOK_LOOK.leafPaper);
+      const front = leafTexturesInUse()!.slots[0]!.front;
+      expect(front.emissiveIntensity).toBe(leaf.emissiveIntensity);
+    } finally {
+      closeLeafTextures();
     }
   });
 

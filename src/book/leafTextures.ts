@@ -112,13 +112,14 @@ function createTexture(canvas: HTMLCanvasElement): THREE.CanvasTexture {
 }
 
 function createFrontMaterial(texture: THREE.Texture): THREE.MeshStandardMaterial {
-  // The map carries the paper color, so the color stays white. A low emissive map keeps the page readable at night.
+  // The map carries the paper color, so the color stays white. The emissive map has the strength of the blank
+  // leaf, so the paper looks the same before and after the swap to the blank material.
   return new THREE.MeshStandardMaterial({
     map: texture,
     roughness: 1,
     emissive: '#ffffff',
     emissiveMap: texture,
-    emissiveIntensity: BOOK_LOOK.leafTextureGlowIntensity,
+    emissiveIntensity: BOOK_LOOK.leafGlowIntensity,
   });
 }
 

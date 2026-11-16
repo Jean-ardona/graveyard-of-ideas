@@ -35,7 +35,12 @@ function contentStyle(width: number, fadeSeconds: number): CSSProperties {
     height: '100%',
     overflowY: 'auto',
     padding: `${scaled(M.paddingTop, width)} ${scaled(M.paddingX, width)}`,
-    background: BOOK_LOOK.leafPaper,
+    /** No paper of its own: the leaf under it (texture, then blank paper) is the paper, so there is no second sheet. */
+    background: 'transparent',
+    border: 'none',
+    borderRadius: 0,
+    boxShadow: 'none',
+    outline: 'none',
     color: BOOK_LOOK.leafInk,
     fontFamily: BOOK_BODY_STACK,
     fontSize: scaled(M.bodySize, width),

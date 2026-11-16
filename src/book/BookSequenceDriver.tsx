@@ -32,7 +32,7 @@ import {
   syncLeafTextures,
 } from './leafTextureLayer';
 import { isIdle, leafAngle, renderedLeafAngle } from './pageTurn';
-import { closeBook, getReadingProjectId } from './readingBook';
+import { closeBook, getReadingProjectId, watchReadingProject } from './readingBook';
 import { readingMachine } from './readingMachine';
 
 /**
@@ -271,6 +271,7 @@ export default function BookSequenceDriver() {
     });
 
     // A saved edit reaches the leaf texture; it is drawn only while the texture shows, once per change.
+    const unwatchProject = watchReadingProject();
     const unsubscribeStore = appStore.subscribe(() => {
       const id = getReadingProjectId();
       if (id !== null) setLeafProject(savedProject(id));
@@ -285,6 +286,7 @@ export default function BookSequenceDriver() {
       unsubscribeMachine();
       unsubscribePointer();
       unsubscribeStore();
+      unwatchProject();
       releaseCurl();
       closeLeafTextures();
     };

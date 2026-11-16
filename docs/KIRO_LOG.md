@@ -179,3 +179,42 @@ Open decisions: the cavity was later removed in favor of a plinth (see the fix s
 - **Tests:** `leafTextures.test.ts` (fake 2D context: sizes, filters, sRGB, material slots, drawn calls and colors, no transform, UV orientation of the rigid and the curled front face, dirty-only redraw, disposal count, no context, a later canvas failing, draw-call count, source scans), `leafTextureLayer.test.ts` (ordering of the hand-over, no report keeps the texture, reduced motion, font before and after close, a dirty leaf drawn before the texture shows, nothing drawn per frame, no 2D context and a throwing draw leave no console output). Existing tests changed: `bookOverlay.test.tsx` got two tests (the opacity report and the reduced-motion style) and imports; `bookDriver.test.ts` got two source tests for the texture lifetime and the sync from the listener. No existing assertion was changed.
 - **Draw calls with the book open:** 12 before this task, 27 with the leaf textures (each leaf is now a six-group box with a material array, so 6 calls instead of 1), 23 while a leaf is curled. Counted from the meshes and groups, not measured on a GPU. Canvas draws: 3 leaves when the book opens, 3 again when the font arrives, then only changed leaves at a turn start; none per frame.
 - **Not verified without a GPU:** how the text looks on the leaf and against the overlay (line up, brightness: the textured front uses emissive 0.25 while the blank paper uses 0.4, so a visible step is possible and is a tuning value), the frame rate on Low with 15 more draw calls, the texture upload stutter on first open, and the real `transitionend` timing in a browser.
+
+## Fix after 5.3.8: page overlay looked like a second sheet
+- **Problem:** at rest the HTML overlay painted the flat `leafPaper` hex, while the leaf is lit and has an emissive term, so the overlay looked whiter than the 3D paper.
+- **Choice:** the overlay content is now `transparent`, with `border`, `boxShadow`, `outline` set to none and radius 0. The leaf under it is the only paper. The page is never uncovered in the cross-fade: the texture stays until the overlay reports opacity 1, then the blank leaf shows, and a leaf surface is always present. The cross-fade order, page model and timings are unchanged.
+- **One paper look:** the textured front now uses `leafGlowIntensity` (0.4), the same strength as the blank leaf, so the swap does not change the paper. `leafTextureGlowIntensity` was removed. `leafPaper` is the single token for the blank leaf, the texture fill and the glow.
+- **Rect check:** `BOOK_PAGE_FACE` has the same x and y extent as the leaf and the same z as the front face of leaf 0 (`restLeafZ(0) + LEAF_THICKNESS / 2 = INNER_DEPTH / 2`), so the projected rect matches the face. No change needed.
+- **Tests:** `bookOverlay.test.tsx` checks no paper, border, shadow, outline or radius on the overlay containers, and that blank leaf color, emissive, texture fill and glow all come from the one token.
+- **Not verifiable without a GPU:** the real rendered match of lit paper, texture and blank leaf, and the pixel alignment of the rect.
+
+## Task 5.3.9: Integration and checkpoint
+
+- **Spec:** the design edge cases ("Project removed or no longer resting while a book is open", "OPEN while another cinematic runs") and the `paused` rule in the UI-mode section fixed the behavior. Requirements 2.1, 2.3 and 2.5 were rewritten for the new flow (see below). Page 3 is recorded as decided: `reducedVersion` next to the next action and the resurrection button; `goal`, `epitaph` and `notes` stay in the grimoire (task 8.1) with no page. The wording of 2.1, 2.3 and 2.5 is left for the user's review.
+- **Steering:** `tech.md` (clean up every temporary object, skipping or reloading shows the final state without replaying, measure on the target machine, no performance promises), `structure.md` (tests in `src/tests`, machine in `src/book`) and `product.md` (animations never block: a removed project simply returns the book to its base).
+- **What the earlier tasks had contributed, 5.3.1 to 5.3.8:**
+  - 5.3.1: the pure core (machine, sequence, page model, guard) and design properties 1-15 (P10-P24), which already cover SKIP and CLOSE ordering, so this task added no machine property.
+  - 5.3.2 to 5.3.4: the shared model, the night look, the sequence driver and local fonts.
+  - 5.3.5: pages overlay and page turning.
+  - 5.3.6: the curl (`leafCurl`, `leafCurlMesh`), design properties 16-22, playbook entries P25-P31.
+  - 5.3.7: the pure leaf-face and cross-fade modules, design properties 23-27, playbook entries P51-P55.
+  - 5.3.8: canvas textures for the leaf text and the overlay hand-over.
+  - Playbook check: P25-P31 and P51-P55 are present in `docs/KIRO_PLAYBOOK.md` (P32-P50 sit between them); no gap, no change.
+- **Gaps found and closed:** (1) nothing dispatched SKIP then CLOSE when the open project was removed; `readingBook.ts` now has `endReading()` and `watchReadingProject()`, started by the driver. `endReading()` finishes a turn in progress, then SKIP, CLOSE, and SKIP again, so the book lands on `closed` without playing (its tomb may be gone). Leaving `open` makes the driver request the pointer, and reaching `closed` disposes the curl geometry and the textures. (2) `paused` existed only as a type. The machine now has `pause()`, `resume()` and `isPaused()`: ticks and page gestures freeze, `uiMode()` reads `paused`, and `resume()` brings back the mode of the phase. OPEN is refused while paused (it goes through the same guard). `uiMode.ts` needed no change.
+- **Tests:** new `src/tests/bookIntegration.test.tsx` mounts the real `BookSequenceDriver` (only `@react-three/fiber` and the pointer functions are mocked, a fake 2D context stands in for the canvas) and runs frames as the render loop would. It covers: curl geometry and textures made once on OPEN; a curled turn swaps and restores the leaf; CLOSE, SKIP, project removal, a project that no longer rests, removal during the opening and removal while paused each leave no undisposed geometry (1 curl), texture (3) or material (3), zero canvas size, and the shared flat geometry and material restored; SKIP in a curled turn lands on page 1 with no extra notification; a fresh module state starts `closed` with nothing created; pause freezes the curl and the page state and resume restores the `reading` mode; OPEN refused in `burying`, `resurrecting`, `paused` and the three book modes; the whole flow with a mocked pointer (OPEN, turn, CLOSE ends at page 0, `inputLocked` false, one `unlocked` request); reduced motion end to end (open at once, no curl at any notification, overlay never `fading`, texture hidden). The overlay itself being opaque at once under reduced motion stays covered by the existing `bookOverlay.test.tsx` test.
+- **Results:** `npx vitest run` 470 passed in 37 files; `npx tsc --noEmit` clean.
+- **Limits of the tests:** the curl swap starts one frame after the turn starts (the leaf is still at angle 0 at the first notification), so the tests draw one frame first. `paused` has no caller yet; task 9.1 will call `pause()` and `resume()`. A removed project ends the reading even while paused (it also leaves the pause flag set; the caller of `resume()` decides when to clear it).
+
+### Manual measurement checklist: target machine, Low quality
+
+Not measured. I could not run the app on the target machine, so every item below is pending the user's manual check. No numbers are recorded and none are claimed.
+
+- [ ] Frame rate during the opening sequence (lift, approach, cover): pending, result: ______
+- [ ] Frame rate during a curled turn compared with a flat turn (reduced motion on gives the flat one): pending, result: ______
+- [ ] First open with the texture upload: no visible stutter: pending, result: ______
+- [ ] Cross-fade look at 100% zoom: no visible shift or blank frame, readable at night, no amber: pending, result: ______
+- [ ] Cursor shapes (grab, grabbing, text, pointer): pending, result: ______
+- [ ] Escape refusal, then "Click to resume": pending, result: ______
+- [ ] Font fallback: rename the font file once, reload, the fallback stack shows with no message and no console output: pending, result: ______
+
+Also pending from earlier sessions (see the "Not verified" lines above): how the bend and the leaf text look in the real scene, the emissive match of blank and textured paper, and the pixel alignment of the overlay rectangle.

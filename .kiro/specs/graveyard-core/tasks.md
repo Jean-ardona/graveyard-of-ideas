@@ -26,10 +26,10 @@ Build Graveyard of Ideas in layers: pure domain logic first (cheap, GPU-free, pr
   - [x] 4.3 Interaction prompts. _Requirements: 1.5_
   - [x] 4.4 Quality presets, default Low. Checkpoint: measure on the target machine. _Requirements: 8.1_
 
-- [ ] 5. Tombs and book
+- [x] 5. Tombs and book
   - [x] 5.1 Tomb with slab and cavity, rendered from resting projects by slot. _Requirements: 2.1_
   - [x] 5.2 3D book model with embedded HTML pages and four parts, autosaved edits. _Requirements: 2.3, 2.4_
-  - [ ] 5.3 UI state machine; open/close sequences; reading mode; Escape handling. _Requirements: 2, 9_
+  - [x] 5.3 UI state machine; open/close sequences; reading mode; Escape handling. _Requirements: 2, 9_
     Design: "Book interaction (task 5.3)" in design.md. Split into nine sub-tasks (5.3.1 to 5.3.9), each one Kiro session and one commit, run in order. Sub-tasks are never marked optional because each one carries its own tests.
     Note: after 5.3.6 a set of corrections to 5.3.5 and 5.3.6 was built outside the spec: opening only from the front of the tomb (`isInFrontOfTomb`, `FRONT_MIN_DOT` 0.35); timings of 1.0 s, 1.2 s and 1.2 s; two drag zones; hand-scrubbed front cover and back board; an end position after the last page; back-close and the 180 degree flip; a close from the last page turns the leaf first; `CURL_STRENGTH`; the leaf stacking rule. They are documented in design.md "Corrections after 5.3.6" and covered by playbook P32-P50. Where a sub-task below says otherwise, the corrections win.
     Note: real-book faces (text on both faces, two pages per spread, editable fields on the left page) were considered and moved to docs/POLISH_BACKLOG.md; they need a page-model change.
@@ -145,7 +145,7 @@ Build Graveyard of Ideas in layers: pure domain logic first (cheap, GPU-free, pr
       - All earlier tests pass; `tsc` strict has no errors.
     - _Requirements: 2.2, 2.3, 2.4, 8.2, 8.3, 9.2_
 
-  - [ ] 5.3.9 Integration and checkpoint
+  - [x] 5.3.9 Integration and checkpoint
     - Scope: wire the whole flow and handle edge cases, measure on the target machine, update logs. Handle skip, reload and removed-project cases, now including the curl and the leaf text: a project removed or no longer resting while open dispatches SKIP then CLOSE, requests the pointer, and disposes the curl geometry and leaf textures; reload always starts `closed` with nothing created; SKIP during a curled turn finishes it and restores the flat leaf and shared materials; `paused` freezes ticks (curl and fade included) and restores the mode. Reduced motion verified end to end (no curl, no fade). Manual measurement on the target machine follows the single checklist in the acceptance criteria. Update `docs/KIRO_LOG.md`. Verify `docs/KIRO_PLAYBOOK.md` holds entries P25-P31 (added by 5.3.6) and P51-P55 (added by 5.3.7); P32-P50 were added by the corrections after 5.3.6. Fill any gap. Update `requirements.md` so 2.1, 2.3 and 2.5 describe the new flow, and record the page 3 decision (see the block below).
     - Files: `src/book/readingBook.ts`, `src/book/BookSequenceDriver.tsx`, `src/interaction/uiMode.ts` (only if integration needs it), `src/tests/` (integration tests), `docs/KIRO_LOG.md`, `docs/KIRO_PLAYBOOK.md` (check only), `.kiro/specs/graveyard-core/requirements.md`.
     - Requirements: 2.1, 2.2, 2.3, 2.5, 2.6, 8.1, 8.2, 8.3, 9.1, 9.2, 9.3

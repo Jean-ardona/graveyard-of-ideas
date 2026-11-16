@@ -10,7 +10,7 @@ import { COLORS } from '../world/config';
 export const BOOK_LOOK = {
   /** Pale blue-gray band of the page edges; clearly lighter than the cover. */
   pageEdge: '#b7c0cf',
-  /** Pale parchment blue-gray of the leaves, the color of the page overlay and of the leaf textures. */
+  /** Pale parchment blue-gray of the leaves: the one paper token, for the blank leaf, the leaf textures and the overlay. */
   leafPaper: '#c3ccdb',
   /** Text on the leaves. */
   leafInk: '#141c30',
@@ -23,9 +23,8 @@ export const BOOK_LOOK = {
   buttonFill: '#1d2740',
   buttonText: '#c8d8ff',
   buttonBorder: '#3b4d73',
+  /** Emissive strength of the blank leaf and of the textured front face alike, so both render the same paper. */
   leafGlowIntensity: 0.4,
-  /** Emissive strength of the textured front face of a leaf; tuned on the target machine. */
-  leafTextureGlowIntensity: 0.25,
   /** One-line border drawn on the front board. */
   coverBorder: '#5f7298',
   /** Emissive tint of the page edges and the cover border. */
@@ -83,7 +82,7 @@ export function createCoverMaterial(map: THREE.Texture): THREE.MeshStandardMater
   });
 }
 
-/** Leaf face: close to the overlay page color, so the open book never flashes gray-blue. */
+/** Leaf face. At rest the transparent page overlay shows this paper, so the page is one sheet. */
 export function createLeafMaterial(): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
     color: BOOK_LOOK.leafPaper,

@@ -16,12 +16,14 @@ A first-person 3D night graveyard where each resting project is a small book ins
 
 ## Requirement 2: Open a tomb and read its book
 **User story:** As a user, I want to take a project's book out of its tomb, so that I can reread and edit its story.
-1. WHEN the user activates a nearby resting tomb THE SYSTEM SHALL slide the slab open, reveal the cavity and raise the book from it to a reading position, then open the book.
+1. WHEN the user activates a nearby resting tomb from its front THE SYSTEM SHALL lift the book off its base, bring it toward the player to a reading position, then open its cover.
 2. WHILE a book is open THE SYSTEM SHALL suspend walking, keep camera and book stable, and make the cursor available for typing and page turning.
-3. THE SYSTEM SHALL display four book parts: Ambition, Abandonment, Remains, Second chance.
+3. THE SYSTEM SHALL display the book as three pages: page 1 the title and burial date, page 2 the reason for abandonment and the idea, page 3 the next action, the optional reduced version and the resurrection button. (Decided: `goal`, `epitaph` and `notes` have no page and stay in the grimoire, task 8.1.)
 4. WHEN the user edits a field THE SYSTEM SHALL save the change automatically.
-5. WHEN the user closes the book without resurrecting THE SYSTEM SHALL lower it into the cavity, close the slab and restore walking.
+5. WHEN the user closes the book without resurrecting THE SYSTEM SHALL close its cover, return it to its base on the tomb and restore walking.
 6. WHEN the user presses Escape while reading THE SYSTEM SHALL close the book or open the menu without losing saved edits.
+
+*Note (task 5.3.9): the wording of 2.1, 2.3 and 2.5 was rewritten for the new flow and is left for the user's review. The page 3 content in 2.3 is already decided.*
 
 ## Requirement 3: Central grimoire
 **User story:** As a user, I want a central register, so that I can create and find all my projects.

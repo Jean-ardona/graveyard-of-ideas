@@ -49,6 +49,11 @@ export interface ReadingMachine {
   turnPage(direction: TurnDirection): void;
   /** Ends a settling turn at once (reduced motion). A close that was waiting for the pages then goes ahead. */
   finishTurn(): void;
+  /** Freezes ticks and page input until `resume()`; the UI mode reads `paused` meanwhile. Calling it twice changes nothing. */
+  pause(): void;
+  /** Ends the freeze; the UI mode of the phase comes back. */
+  resume(): void;
+  isPaused(): boolean;
   /** Derived selectors. */
   phase(): BookPhase;
   uiMode(): UiMode;
@@ -71,6 +76,8 @@ export function createReadingMachine(): ReadingMachine {
   let seenIndex = pages.index;
   let seenTurning = pages.direction !== null;
   let seenCloseDrag = pages.closeDrag;
+  let paused = false;
+  let seenPaused = false;
 
   /** Runs after every mutation: keeps the invariants, derives progress and reports discrete changes. */
   function atEnd(): boolean {
@@ -96,9 +103,10 @@ export function createReadingMachine(): ReadingMachine {
     const turning = pages.direction !== null;
     const unchanged =
       sequence.phase === seenPhase && pages.status === seenStatus && pages.index === seenIndex && turning === seenTurning &&
-      pages.closeDrag === seenCloseDrag;
+      pages.closeDrag === seenCloseDrag && paused === seenPaused;
     if (unchanged) return;
     seenCloseDrag = pages.closeDrag;
+    seenPaused = paused;
     seenPhase = sequence.phase;
     seenStatus = pages.status;
     seenIndex = pages.index;
@@ -111,6 +119,11 @@ export function createReadingMachine(): ReadingMachine {
     if (sequence.phase !== 'open') return;
     change();
     settled();
+  }
+
+  /** Page gestures that start or move a turn; frozen while paused. */
+  function whileReading(change: () => void): void {
+    if (!paused) whileOpen(change);
   }
 
   return {
@@ -133,14 +146,15 @@ export function createReadingMachine(): ReadingMachine {
       settled();
     },
     tick(dt) {
+      if (paused) return;
       const step = clampDelta(dt);
       if (sequence.phase === 'open') tickPageTurn(pages, step);
       startPendingAutoTurn();
       tickSequence(sequence, step, readyToClose(), atEnd());
       settled();
     },
-    beginDrag: (side = 'right') => whileOpen(() => beginDrag(pages, side)),
-    dragTo: (dxPx, pageWidthPx) => whileOpen(() => dragTo(pages, dxPx, pageWidthPx)),
+    beginDrag: (side = 'right') => whileReading(() => beginDrag(pages, side)),
+    dragTo: (dxPx, pageWidthPx) => whileReading(() => dragTo(pages, dxPx, pageWidthPx)),
     endDrag: () =>
       whileOpen(() => {
         const scrubbed = coverOpenFraction(pages);
@@ -152,7 +166,7 @@ export function createReadingMachine(): ReadingMachine {
         if (takeCloseRequest(pages)) startClosingFromCover(sequence, scrubbed, back);
       }),
     cancelDrag: () => whileOpen(() => cancelDrag(pages)),
-    turnPage: (direction) => whileOpen(() => turnByKey(pages, direction)),
+    turnPage: (direction) => whileReading(() => turnByKey(pages, direction)),
     finishTurn: () =>
       whileOpen(() => {
         settleNow(pages);
@@ -160,8 +174,17 @@ export function createReadingMachine(): ReadingMachine {
         settleNow(pages);
         tickSequence(sequence, 0, readyToClose(), atEnd());
       }),
+    pause() {
+      paused = true;
+      settled();
+    },
+    resume() {
+      paused = false;
+      settled();
+    },
+    isPaused: () => paused,
     phase: () => sequence.phase,
-    uiMode: () => uiModeForPhase(sequence.phase),
+    uiMode: () => (paused ? 'paused' : uiModeForPhase(sequence.phase)),
     pointerLockReleased: () => sequence.phase === 'open',
     inputLocked: () => sequence.phase !== 'closed',
     subscribe(listener) {

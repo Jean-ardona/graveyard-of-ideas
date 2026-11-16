@@ -69,6 +69,32 @@ export function closeBook(): void {
   finishTurnWhenReducedMotion();
 }
 
+/**
+ * Ends the reading at once, whatever the phase: SKIP, then CLOSE, then SKIP again so the book lands on
+ * `closed` without playing. A page turn in progress is finished first, never replayed. Leaving `open`
+ * hands the pointer back through the driver, and `closed` releases the curl geometry and leaf textures.
+ */
+export function endReading(): void {
+  readingMachine.finishTurn();
+  readingMachine.skip();
+  readingMachine.close();
+  readingMachine.finishTurn();
+  readingMachine.skip();
+}
+
+/**
+ * Watches the saved projects: when the open book's project is removed or no longer rests, the
+ * reading ends at once. Returns a function that stops watching.
+ */
+export function watchReadingProject(): () => void {
+  return appStore.subscribe((state) => {
+    const projectId = readingStore.getState().projectId;
+    if (projectId === null || readingMachine.phase() === 'closed') return;
+    const project = state.data.projects.find((p) => p.id === projectId);
+    if (project?.status !== 'resting') endReading();
+  });
+}
+
 /** Id of the project whose book is open or moving, or null. Not reactive; for event handlers. */
 export function getReadingProjectId(): string | null {
   return readingStore.getState().projectId;
