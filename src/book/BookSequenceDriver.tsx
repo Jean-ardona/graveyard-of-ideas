@@ -4,6 +4,7 @@ import { Quaternion, Vector3 } from 'three';
 import type { Camera, Mesh, Object3D } from 'three';
 import { getPointerMode, releasePointer, requestPointer, subscribePointerMode } from '../interaction/pointerLock';
 import { appStore } from '../store/appStore';
+import { backBoardAngle } from './backClose';
 import { BOOK_PAGE_FACE, BOOK_PIVOTS, BOOK_SIZE } from './bookAssets';
 import { getBookHandle } from './bookHandles';
 import { LEAF_COUNT, leafCoverProgress, leafHingeAngle, leafHingeZ, leafTurnFraction } from './bookStack';
@@ -36,6 +37,11 @@ const targetPosition = new Vector3();
 const targetQuaternion = new Quaternion();
 const parentQuaternion = new Quaternion();
 const pageCorner = new Vector3();
+/** Axis along the spine in the frame of the book, a point on it, and scratch values for the back swing. */
+const Y_AXIS = new Vector3(0, 1, 0);
+const SPINE_POINT = new Vector3(BOOK_PIVOTS.frontBoard[0], 0, 0);
+const swingOffset = new Vector3();
+const swingRotation = new Quaternion();
 /** Uniform scale of the resting book; it shrinks to 1 on the way to the reading pose. */
 let baseScale = 1;
 /** Turned fractions last written, so a leaf is touched only when it changes. NaN forces a first write. */
@@ -73,7 +79,7 @@ function captureReadingPose(handle: BookHandle, camera: Camera): void {
  * playing the sequence backward retraces the same path. Opening is a negative rotation about y.
  */
 function applyPose(handle: BookHandle): void {
-  const { lift, approach, cover } = readingMachine.progress;
+  const { lift, approach, cover, swing } = readingMachine.progress;
   const { root } = handle;
   root.position.copy(basePosition);
   root.position.y += LIFT_HEIGHT * lift;
@@ -81,9 +87,26 @@ function applyPose(handle: BookHandle): void {
   root.quaternion.copy(baseQuaternion).slerp(targetQuaternion, approach);
   root.scale.setScalar(baseScale + (1 - baseScale) * approach);
   // A closing gesture scrubs the rigid cover about the spine; the leaves fold with it like in the closing sequence.
-  const scrubbed = cover * coverOpenFraction(readingMachine.pages, appStore.getState().data.prefs.reducedMotion);
+  const reducedMotion = appStore.getState().data.prefs.reducedMotion;
+  const scrubbed = cover * coverOpenFraction(readingMachine.pages, reducedMotion);
   handle.parts.cover.rotation.y = -coverAngle(scrubbed);
   applyLeaves(handle, scrubbed);
+  // Closing from the last page: the back half swings over the folding front stack (a dragged back
+  // board, or the closing sequence on the back side), then the flip turns the book back to the base.
+  const dragged = backBoardAngle(readingMachine.pages, reducedMotion);
+  applySpineSwing(root, readingMachine.sequence.side === 'back' ? swing : dragged);
+}
+
+/**
+ * Turns the book about its spine axis by `angle` radians (toward +z, like opening), keeping the
+ * spine where it is. Runs after the pose of the root has been written; does nothing at 0.
+ */
+function applySpineSwing(root: Object3D, angle: number): void {
+  if (angle === 0) return;
+  swingRotation.setFromAxisAngle(Y_AXIS, -angle);
+  swingOffset.copy(SPINE_POINT).applyQuaternion(swingRotation).sub(SPINE_POINT).multiplyScalar(-root.scale.x);
+  root.position.add(swingOffset.applyQuaternion(root.quaternion));
+  root.quaternion.multiply(swingRotation);
 }
 
 /** The curl geometry of the open book: made when the book leaves `closed`, disposed at `closed`. */

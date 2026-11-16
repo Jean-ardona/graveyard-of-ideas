@@ -142,7 +142,7 @@ describe('sequence properties', () => {
 
 describe('sequence examples', () => {
   function stateAt(t: number): SequenceState {
-    return { phase: 'lifting', t, closePending: false };
+    return { phase: 'lifting', t, closePending: false, side: 'front' };
   }
 
   it('changes phase exactly at the end of each step', () => {
@@ -165,18 +165,18 @@ describe('sequence examples', () => {
   it('discards the time left over at the end points', () => {
     const opening = stateAt(TOTAL_SECONDS - MAX_FRAME_DELTA / 5);
     tickSequence(opening, MAX_FRAME_DELTA, true);
-    expect(opening).toEqual({ phase: 'open', t: TOTAL_SECONDS, closePending: false });
+    expect(opening).toEqual({ phase: 'open', t: TOTAL_SECONDS, closePending: false, side: 'front' });
 
-    const closing: SequenceState = { phase: 'closing', t: MAX_FRAME_DELTA / 5, closePending: false };
+    const closing: SequenceState = { phase: 'closing', t: MAX_FRAME_DELTA / 5, closePending: false, side: 'front' };
     tickSequence(closing, MAX_FRAME_DELTA, true);
-    expect(closing).toEqual({ phase: 'closed', t: 0, closePending: false });
+    expect(closing).toEqual({ phase: 'closed', t: 0, closePending: false, side: 'front' });
   });
 
   it('ignores OPEN while running and CLOSE or SKIP while closed', () => {
     const running = stateAt(LIFT_END + 0.1);
     running.phase = 'approaching';
     applySequenceEvent(running, 'OPEN', true);
-    expect(running).toEqual({ phase: 'approaching', t: LIFT_END + 0.1, closePending: false });
+    expect(running).toEqual({ phase: 'approaching', t: LIFT_END + 0.1, closePending: false, side: 'front' });
 
     const closed = createSequenceState();
     applySequenceEvent(closed, 'CLOSE', true);
@@ -185,7 +185,7 @@ describe('sequence examples', () => {
   });
 
   it('keeps CLOSE pending in open until the pages are idle', () => {
-    const state: SequenceState = { phase: 'open', t: TOTAL_SECONDS, closePending: false };
+    const state: SequenceState = { phase: 'open', t: TOTAL_SECONDS, closePending: false, side: 'front' };
     applySequenceEvent(state, 'CLOSE', false);
     expect(state.phase).toBe('open');
     expect(state.closePending).toBe(true);

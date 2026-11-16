@@ -38,14 +38,18 @@ function hinge(position: readonly [number, number, number], mesh: THREE.Mesh): T
 }
 
 /**
- * Cover, spine, page block and pages as four separate parts. The cover and each leaf sit in a
- * group on the spine axis, so setting its rotation about y turns it about the spine. No lights,
+ * Cover, spine, page block and pages as four separate parts; the page block part also holds the back
+ * board (two meshes), so the contract stays at four parts and seven meshes. The cover, the back board
+ * and each leaf sit in a group on the spine axis, so setting its rotation about y turns it about the spine. No lights,
  * no shadow flags and no allocation of geometry or materials.
  */
 export function createBookModel(assets: BookAssets): BookModel {
   const cover = hinge(BOOK_PIVOTS.frontBoard, new THREE.Mesh(assets.frontBoard, assets.coverMaterial));
   const spine = new THREE.Group().add(new THREE.Mesh(assets.spine, assets.spineMaterial));
-  const pageBlock = new THREE.Group().add(new THREE.Mesh(assets.pageBlock, assets.pageBlockMaterial));
+  // The back board is part of the page block group: the same geometry and cover material (so the same
+  // border texture) as the front board, on its own hinge on the spine axis behind the block.
+  const backBoard = hinge(BOOK_PIVOTS.backBoard, new THREE.Mesh(assets.frontBoard, assets.coverMaterial));
+  const pageBlock = new THREE.Group().add(new THREE.Mesh(assets.pageBlock, assets.pageBlockFaces), backBoard);
   const leaves = BOOK_PIVOTS.leaves.map((position) =>
     hinge(position, new THREE.Mesh(assets.leaf, assets.leafMaterial)),
   );

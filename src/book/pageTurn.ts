@@ -1,7 +1,12 @@
-import { PAGE_TURN } from './bookTimings';
+import { AUTO_TURN_SECONDS, PAGE_TURN } from './bookTimings';
 
-/** One page per leaf; the last leaf never turns forward. */
+/** One page per leaf. */
 export const PAGE_COUNT = 3;
+/**
+ * The end position: every leaf turned, the inside of the back board showing on the right. It comes
+ * after the last page (index `PAGE_COUNT - 1`), so `index` runs from 0 to `END_INDEX`.
+ */
+export const END_INDEX = PAGE_COUNT;
 
 export type TurnDirection = 'next' | 'prev';
 export type TurnStatus = 'idle' | 'dragging' | 'settling';
@@ -23,6 +28,8 @@ export interface PageTurnState {
   closeDrag: boolean;
   /** Set by a released closing gesture; the reading machine takes it and dispatches CLOSE. */
   closeRequested: boolean;
+  /** The settling turn is an automatic one (a close from the last page): it takes `AUTO_TURN_SECONDS`. */
+  autoTurn: boolean;
 }
 
 export function createPageTurnState(): PageTurnState {
@@ -35,6 +42,7 @@ export function createPageTurnState(): PageTurnState {
     side: null,
     closeDrag: false,
     closeRequested: false,
+    autoTurn: false,
   };
 }
 
@@ -50,15 +58,16 @@ export function isIdle(state: PageTurnState): boolean {
 }
 
 function canTurn(state: PageTurnState, direction: TurnDirection): boolean {
-  return direction === 'next' ? state.index < PAGE_COUNT - 1 : state.index > 0;
+  return direction === 'next' ? state.index < END_INDEX : state.index > 0;
 }
 
 /**
- * What dragging from `side` does on page `index`. The right page turns forward and, on the last
- * page, closes the book. The left page turns back and, on the first page, closes the book.
+ * What dragging from `side` does at position `index`. The right page turns forward (the last page
+ * turns into the end position) and, in the end position, closes the book with the back board. The
+ * left page turns back and, on the first page, closes the book.
  */
 export function zoneAction(index: number, side: DragSide): ZoneAction {
-  if (side === 'right') return index < PAGE_COUNT - 1 ? 'next' : 'close';
+  if (side === 'right') return index < END_INDEX ? 'next' : 'close';
   return index > 0 ? 'prev' : 'close';
 }
 
@@ -103,6 +112,7 @@ function rest(state: PageTurnState): void {
   state.settleTarget = 0;
   state.side = null;
   state.closeDrag = false;
+  state.autoTurn = false;
 }
 
 /**
@@ -150,6 +160,17 @@ export function turnByKey(state: PageTurnState, direction: TurnDirection): void 
   settle(state, 1);
 }
 
+/**
+ * Turns the last page into the end position by itself, with the short automatic duration. Works
+ * only on the last page at rest. Returns whether the turn started.
+ */
+export function autoTurnLastPage(state: PageTurnState): boolean {
+  if (state.status !== 'idle' || state.index !== PAGE_COUNT - 1) return false;
+  turnByKey(state, 'next');
+  state.autoTurn = true;
+  return true;
+}
+
 /** Ends a settling turn at its target: a completed turn changes the page, a returned one does not. */
 function arrive(state: PageTurnState, direction: TurnDirection): void {
   if (state.settleTarget === 1) state.index += direction === 'next' ? 1 : -1;
@@ -159,7 +180,7 @@ function arrive(state: PageTurnState, direction: TurnDirection): void {
 /** Moves a settling turn toward its target and finishes it on arrival. */
 export function tickPageTurn(state: PageTurnState, dt: number): void {
   if (state.status !== 'settling' || (state.direction === null && !state.closeDrag)) return;
-  const step = Math.max(dt, 0) / PAGE_TURN.settleSeconds;
+  const step = Math.max(dt, 0) / (state.autoTurn ? AUTO_TURN_SECONDS : PAGE_TURN.settleSeconds);
   const target = state.settleTarget;
   state.progress = target === 1 ? Math.min(state.progress + step, 1) : Math.max(state.progress - step, 0);
   if (state.progress !== target) return;

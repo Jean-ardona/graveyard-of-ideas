@@ -8,6 +8,15 @@ export const APPROACH_END = LIFT_END + SEQUENCE_TIMINGS.approachSeconds;
 /** Length of the whole opening sequence. */
 export const TOTAL_SECONDS = APPROACH_END + SEQUENCE_TIMINGS.coverSeconds;
 
+/**
+ * Closing from the last page, the back board swings over the leaves, then the book flips 180 degrees
+ * about the spine while it returns to its base. The flip takes the place of the approach step on
+ * that path: it lasts `seconds` instead of `SEQUENCE_TIMINGS.approachSeconds`.
+ */
+export const BACK_FLIP = { seconds: 1.6 } as const;
+/** Timeline seconds the back-closing return covers per real second during the flip. */
+export const BACK_FLIP_RATE = SEQUENCE_TIMINGS.approachSeconds / BACK_FLIP.seconds;
+
 /** Longest frame step the book accepts, the same clamp as the player controller. */
 export const MAX_FRAME_DELTA = 0.05;
 
@@ -26,6 +35,9 @@ export const PAGE_TURN = {
   commitThreshold: 0.5,
   settleSeconds: 0.3,
 } as const;
+
+/** Seconds the last page takes to turn by itself when the book is closed from it. */
+export const AUTO_TURN_SECONDS = 0.45;
 
 /**
  * Curved page turn. `segments` is the number of equal pieces of the bending leaf; `tipLag` is the

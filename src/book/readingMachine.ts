@@ -10,8 +10,12 @@ import {
   writeProgress,
 } from './bookSequence';
 import type { BookPhase, SequenceProgress, SequenceState } from './bookSequence';
+import { isBackClosingGesture } from './backClose';
 import { coverOpenFraction } from './coverScrub';
 import {
+  END_INDEX,
+  PAGE_COUNT,
+  autoTurnLastPage,
   beginDrag,
   cancelDrag,
   createPageTurnState,
@@ -69,9 +73,26 @@ export function createReadingMachine(): ReadingMachine {
   let seenCloseDrag = pages.closeDrag;
 
   /** Runs after every mutation: keeps the invariants, derives progress and reports discrete changes. */
+  function atEnd(): boolean {
+    return pages.index === END_INDEX;
+  }
+
+  /**
+   * Whether a close may start now: the pages rest and are not on the last page. From the last page
+   * the book first turns that page by itself (see `startPendingAutoTurn`), then closes from the end.
+   */
+  function readyToClose(): boolean {
+    return isIdle(pages) && pages.index !== PAGE_COUNT - 1;
+  }
+
+  /** A close waiting on the last page at rest turns that page automatically. */
+  function startPendingAutoTurn(): void {
+    if (sequence.phase === 'open' && sequence.closePending) autoTurnLastPage(pages);
+  }
+
   function settled(): void {
     if (sequence.phase === 'closed') resetPageTurn(pages);
-    writeProgress(sequence.t, progress);
+    writeProgress(sequence.t, progress, sequence.side);
     const turning = pages.direction !== null;
     const unchanged =
       sequence.phase === seenPhase && pages.status === seenStatus && pages.index === seenIndex && turning === seenTurning &&
@@ -103,7 +124,8 @@ export function createReadingMachine(): ReadingMachine {
       return true;
     },
     close() {
-      applySequenceEvent(sequence, 'CLOSE', isIdle(pages));
+      applySequenceEvent(sequence, 'CLOSE', readyToClose(), atEnd());
+      startPendingAutoTurn();
       settled();
     },
     skip() {
@@ -113,7 +135,8 @@ export function createReadingMachine(): ReadingMachine {
     tick(dt) {
       const step = clampDelta(dt);
       if (sequence.phase === 'open') tickPageTurn(pages, step);
-      tickSequence(sequence, step, isIdle(pages));
+      startPendingAutoTurn();
+      tickSequence(sequence, step, readyToClose(), atEnd());
       settled();
     },
     beginDrag: (side = 'right') => whileOpen(() => beginDrag(pages, side)),
@@ -121,17 +144,21 @@ export function createReadingMachine(): ReadingMachine {
     endDrag: () =>
       whileOpen(() => {
         const scrubbed = coverOpenFraction(pages);
+        const back = isBackClosingGesture(pages);
         endDrag(pages);
         // A closing gesture past the threshold leaves the pages idle: the close starts at once, from
-        // the scrubbed cover angle. Below it the cover settles back to open.
-        if (takeCloseRequest(pages)) startClosingFromCover(sequence, scrubbed);
+        // the scrubbed angle, with the back board when the gesture came from the last page. Below
+        // the threshold the book settles back to open.
+        if (takeCloseRequest(pages)) startClosingFromCover(sequence, scrubbed, back);
       }),
     cancelDrag: () => whileOpen(() => cancelDrag(pages)),
     turnPage: (direction) => whileOpen(() => turnByKey(pages, direction)),
     finishTurn: () =>
       whileOpen(() => {
         settleNow(pages);
-        tickSequence(sequence, 0, isIdle(pages));
+        startPendingAutoTurn();
+        settleNow(pages);
+        tickSequence(sequence, 0, readyToClose(), atEnd());
       }),
     phase: () => sequence.phase,
     uiMode: () => uiModeForPhase(sequence.phase),

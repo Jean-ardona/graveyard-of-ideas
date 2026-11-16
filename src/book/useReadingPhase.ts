@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 import type { BookPhase } from './bookSequence';
 import type { TurnStatus } from './pageTurn';
 import { appStore } from '../store/appStore';
+import { isBackClosingGesture } from './backClose';
 import { readingMachine } from './readingMachine';
 
 /** Current phase of the book sequence; re-renders only on discrete changes. */
@@ -21,6 +22,8 @@ export interface PageTurnView {
    * cover is being scrubbed by a closing gesture. A closing gesture with reduced motion moves nothing.
    */
   turning: boolean;
+  /** The back board is being dragged shut from the last page: the Close button hides too. */
+  backDrag: boolean;
 }
 
 /** Page index and turn status; re-renders on discrete changes only, never per frame. */
@@ -32,5 +35,6 @@ export function usePageTurnView(): PageTurnView {
   );
   const { index, status, direction, closeDrag } = readingMachine.pages;
   const scrubbing = closeDrag && !appStore.getState().data.prefs.reducedMotion;
-  return { index, status, turning: direction !== null || scrubbing };
+  const backDrag = scrubbing && isBackClosingGesture(readingMachine.pages);
+  return { index, status, turning: direction !== null || scrubbing, backDrag };
 }

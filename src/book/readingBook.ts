@@ -66,7 +66,7 @@ export function cancelPageDrag(): void {
 /** Plays the sequence back to the base. Closing waits for a page turn to finish. */
 export function closeBook(): void {
   readingMachine.close();
-  skipWhenReducedMotion();
+  finishTurnWhenReducedMotion();
 }
 
 /** Id of the project whose book is open or moving, or null. Not reactive; for event handlers. */

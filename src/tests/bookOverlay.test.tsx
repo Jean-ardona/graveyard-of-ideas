@@ -18,8 +18,9 @@ function restingProject(): Project {
 /** Brings the singleton machine back to `closed`, whatever state a test left it in. */
 function resetMachine(): void {
   readingMachine.cancelDrag();
-  readingMachine.finishTurn();
   readingMachine.close();
+  // A close from the last page waits for its automatic turn; finishing it lets the close start.
+  readingMachine.finishTurn();
   readingMachine.skip();
 }
 
@@ -78,10 +79,54 @@ describe('BookPageOverlay', () => {
     const button = screen.getByRole('button', { name: 'Resurrect this project' }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
 
-    // The close button dispatches CLOSE.
+    // The close button dispatches CLOSE: from the last page the page turns first, then the book closes.
     fireEvent.click(screen.getByRole('button', { name: 'Close the book' }));
+    expect(readingMachine.phase()).toBe('open');
+    act(settleTurn);
+    act(settleTurn);
     expect(readingMachine.phase()).toBe('closing');
 
     appStore.getState().editProject(project.id, { description: project.description });
+  });
+
+  it('hides the whole overlay while the back board is dragged shut, and returns it on cancel', () => {
+    render(<BookPageOverlay project={restingProject()} />);
+    for (let i = 0; i < 3; i++) {
+      act(() => turnPage('next'));
+      act(settleTurn);
+    }
+    const close = screen.getByTestId('book-close-button');
+    expect(close.style.opacity).toBe('1');
+    act(() => {
+      readingMachine.beginDrag('right');
+      readingMachine.dragTo(-200, 400);
+    });
+    expect(close.style.opacity).toBe('0');
+    expect(close.style.pointerEvents).toBe('none');
+    act(() => readingMachine.cancelDrag());
+    act(settleTurn);
+    expect(close.style.opacity).toBe('1');
+  });
+
+  it('shows no page content in the end position, keeps the last page number, and turns back from the left zone', () => {
+    render(<BookPageOverlay project={restingProject()} />);
+    const content = screen.getByTestId('book-page-content');
+    for (let i = 0; i < 2; i++) {
+      act(() => turnPage('next'));
+      act(settleTurn);
+    }
+    expect(content.style.opacity).toBe('1');
+    expect(screen.getByTestId('book-right-zone').getAttribute('data-zone-action')).toBe('next');
+    act(() => turnPage('next'));
+    act(settleTurn);
+    expect(readingMachine.pages.index).toBe(3);
+    expect(content.style.opacity).toBe('0');
+    expect(content.style.pointerEvents).toBe('none');
+    expect(content.textContent).toContain('Page 3 of 3');
+    expect(screen.getByTestId('book-right-zone').getAttribute('data-zone-action')).toBe('close');
+    expect(screen.getByTestId('book-left-zone').getAttribute('data-zone-action')).toBe('prev');
+    act(() => turnPage('prev'));
+    act(settleTurn);
+    expect(content.style.opacity).toBe('1');
   });
 });

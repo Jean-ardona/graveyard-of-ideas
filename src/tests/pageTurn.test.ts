@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import {
+  END_INDEX,
   PAGE_COUNT,
+  autoTurnLastPage,
   beginDrag,
   cancelDrag,
   createPageTurnState,
@@ -15,7 +17,7 @@ import {
   turningLeafIndex,
 } from '../book/pageTurn';
 import type { DragSide, PageTurnState, TurnDirection } from '../book/pageTurn';
-import { MAX_FRAME_DELTA, PAGE_TURN } from '../book/bookTimings';
+import { AUTO_TURN_SECONDS, MAX_FRAME_DELTA, PAGE_TURN } from '../book/bookTimings';
 
 const RUNS = { numRuns: 200 };
 const WIDTH = 400;
@@ -25,7 +27,8 @@ const dtArb = fc.oneof(
   fc.double({ min: 0, max: MAX_FRAME_DELTA, noNaN: true }),
   fc.double({ min: MAX_FRAME_DELTA, max: 5, noNaN: true }),
 );
-const pageArb = fc.integer({ min: 0, max: PAGE_COUNT - 1 });
+/** Every position: the pages and the end position after the last one. */
+const pageArb = fc.integer({ min: 0, max: END_INDEX });
 const directionArb = fc.constantFrom<TurnDirection>('next', 'prev');
 
 type Op =
@@ -101,7 +104,7 @@ describe('page turn properties', () => {
         for (const op of ops) {
           apply(state, op);
           expect(state.index).toBeGreaterThanOrEqual(0);
-          expect(state.index).toBeLessThanOrEqual(PAGE_COUNT - 1);
+          expect(state.index).toBeLessThanOrEqual(END_INDEX);
           expect(state.progress).toBeGreaterThanOrEqual(0);
           expect(state.progress).toBeLessThanOrEqual(1);
           const angles = leafAngles(state);
@@ -116,7 +119,7 @@ describe('page turn properties', () => {
               expect(leafAngle(state, j)).toBeLessThanOrEqual(leafAngle(state, j - 1));
             }
           }
-          if (state.direction === 'next') expect(state.index).toBeLessThan(PAGE_COUNT - 1);
+          if (state.direction === 'next') expect(state.index).toBeLessThan(END_INDEX);
           if (state.direction === 'prev') expect(state.index).toBeGreaterThan(0);
         }
       }),
@@ -128,7 +131,7 @@ describe('page turn properties', () => {
     fc.assert(
       fc.property(pageArb, directionArb, fc.integer({ min: 0, max: 600 }), (index, direction, distance) => {
         const step = direction === 'next' ? 1 : -1;
-        fc.pre(index + step >= 0 && index + step < PAGE_COUNT);
+        fc.pre(index + step >= 0 && index + step <= END_INDEX);
 
         const released = stateAt(index);
         const progress = dragAndRelease(released, direction, distance);
@@ -152,7 +155,7 @@ describe('page turn properties', () => {
     fc.assert(
       fc.property(pageArb, directionArb, (index, direction) => {
         const step = direction === 'next' ? 1 : -1;
-        const exists = index + step >= 0 && index + step < PAGE_COUNT;
+        const exists = index + step >= 0 && index + step <= END_INDEX;
 
         const keyed = stateAt(index);
         turnByKey(keyed, direction);
@@ -166,7 +169,7 @@ describe('page turn properties', () => {
           expect(dragged.index).toBe(keyed.index);
         }
 
-        if (index < PAGE_COUNT - 1) {
+        if (index < END_INDEX) {
           const round = stateAt(index);
           turnByKey(round, 'next');
           settleFully(round);
@@ -211,11 +214,33 @@ describe('page turn examples', () => {
     turnByKey(first, 'prev');
     expect(isIdle(first)).toBe(true);
 
-    const last = stateAt(PAGE_COUNT - 1);
-    dragAndRelease(last, 'next', 300);
-    turnByKey(last, 'next');
-    expect(last.index).toBe(PAGE_COUNT - 1);
-    expect(isIdle(last)).toBe(true);
+    const end = stateAt(END_INDEX);
+    dragAndRelease(end, 'next', 300);
+    turnByKey(end, 'next');
+    expect(end.index).toBe(END_INDEX);
+    expect(isIdle(end)).toBe(true);
+  });
+
+  it('turns the last page into the end position and back, by key and by drag', () => {
+    const state = stateAt(PAGE_COUNT - 1);
+    turnByKey(state, 'next');
+    settleFully(state);
+    expect(state.index).toBe(END_INDEX);
+    expect([0, 1, 2].map((j) => leafAngle(state, j))).toEqual([Math.PI, Math.PI, Math.PI]);
+    dragAndRelease(state, 'prev', WIDTH * PAGE_TURN.fullTurnRatio);
+    expect(state.index).toBe(PAGE_COUNT - 1);
+  });
+
+  it('turns the last page by itself in the automatic duration, only from the last page', () => {
+    const elsewhere = stateAt(1);
+    expect(autoTurnLastPage(elsewhere)).toBe(false);
+    const state = stateAt(PAGE_COUNT - 1);
+    expect(autoTurnLastPage(state)).toBe(true);
+    tickPageTurn(state, AUTO_TURN_SECONDS / 2);
+    expect(state.progress).toBeCloseTo(0.5);
+    tickPageTurn(state, AUTO_TURN_SECONDS / 2 + 1e-9);
+    expect(state.index).toBe(END_INDEX);
+    expect(state.autoTurn).toBe(false);
   });
 
   it('stays at rest inside the dead zone', () => {

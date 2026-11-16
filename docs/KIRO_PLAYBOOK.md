@@ -48,7 +48,7 @@ The planning is already written here, so credits go to implementation. Run one t
 ### Two drag zones and closing gestures (fix after 5.3.6; test tags use design numbers 28-32, so playbook P(N+4))
 - P32 The wrong direction does nothing: dragging right from the right page or left from the left page leaves the whole page state equal to its starting state, with no progress and no direction (no jitter).
 - P33 Next then previous returns to the same page: a completed drag from the right zone followed by a completed drag from the left zone ends idle on the starting page.
-- P34 A closing gesture needs half the distance: from the left zone on page 0 or the right zone on the last page, a release at or above 50% requests close and below it does not; no leaf moves; cancel never requests it.
+- P34 A closing gesture needs half the distance: from the left zone on page 0 or the right zone in the end position, a release at or above 50% requests close and below it does not; no leaf moves; cancel never requests it.
 - P35 No leaf is both turned and unturned: for any sequence of drags from both sides, keys and ticks, leaf angles are non-increasing, at most one leaf lies strictly between 0 and pi, and idle means every leaf is exactly 0 or pi.
 - P36 Curl strength scales the bend: strength 0 is rigid, 1 is the full tip lag, a stronger curl never bends less; flat ends, constant arc length, finite angles and symmetry hold at any strength.
 
@@ -57,6 +57,20 @@ The planning is already written here, so credits go to implementation. Run one t
 - P38 Release below 50% returns exactly to the open state: after release or cancel, the book is `open` at `t = TOTAL`, cover progress 1, the page model equals a fresh one and the cover angle is exactly `COVER_OPEN_ANGLE`.
 - P39 Release above 50% reaches closed without a jump: the closing starts at the scrubbed cover value, the cover never reopens, and the book ends `closed` on page 0.
 - P40 The cover angle never leaves the open-to-closed range: for any progress (NaN, infinities, zero, out of range), any status and reduced motion, the open fraction is in [0, 1] and the angle in [0, `COVER_OPEN_ANGLE`].
+### Back closing from the end position (fix after the cover scrub; test tags use design numbers 37-41, so playbook P(N+4)); updated by the end-position fix: the back-close gesture now starts in the end position (index `END_INDEX = PAGE_COUNT`), not on the last page
+- P41 The back board angle is monotonic in the drag progress and stays in range: a longer drag from the right zone in the end position never lowers it; for any input (NaN, infinities, out of range, any side, index or reduced motion) it is in [0, pi].
+- P42 Release below 50% returns exactly to the end-position open state: after release or cancel, the book is `open` at `t = TOTAL`, side `front`, swing 0, cover 1, the page model equals a fresh one in the end position.
+- P43 Release above 50% reaches closed with the back up and then the rest pose face up: the swing at release equals the dragged one, it reaches pi, then the book ends `closed`, all progress values 0, side `front`, page 0.
+- P44 The flip is one continuous rotation of exactly 180 degrees: from back up, the swing never increases, each step is bounded, the total is pi, it only turns while the book is at full lift, and it lasts `BACK_FLIP.seconds`.
+- P45 Both covers closed never coexists with a turning leaf: for random sequences of open, skip, close, tick, keys and drags, a closed front cover with the back closed or the book closed has no turning leaf; a back close only happens in the end position.
+
+### End position after the last page (test tags use design numbers 42-46, so playbook P(N+4))
+- P46 Next from the last page reaches the end position and next from the end is a no-op: by key or by a drag past 50%, the page model equals a fresh one at `END_INDEX` with every leaf turned; a key does nothing there and a drag from the right zone is a closing gesture, not a turn.
+- P47 Previous from the end position returns to the last page: by key or by a drag from the left zone, leaves 0 and 1 stay turned and the last leaf is unturned; next then returns to the end position.
+- P48 The back board is never closed while a leaf is unturned: for random sequences of open, skip, close, keys, drags and ticks, whenever the swing is pi, the dragged back board is at pi, or a back closing is running, every leaf angle is pi.
+- P49 Close from the last page ends closed with all leaves turned first and the book face up on its base: the book stays open until the automatic turn has landed, closes from the open pose with no jump (t = TOTAL, cover 1, swing 0), all leaves are turned during the whole closing, and it ends `closed` with all progress 0, side `front` and a fresh page model.
+- P50 Close from the end position equals the back close: a close from the end follows exactly the same sequence (phase, `t`, swing, cover) as the pure back close started from the open pose.
+Page-count semantics changed with the end position: `index` runs from 0 to `END_INDEX` (3) while `PAGE_COUNT` stays 3, so P9, P10, P11 and P28 to P35 now range over every position (0 to 3), and "next" is possible from the last page. The old rule "the last page closes from the right zone" moved to the end position.
 
 ## 3. Hooks worth creating in Kiro
 - On save of files in src/domain: run the domain test suite.

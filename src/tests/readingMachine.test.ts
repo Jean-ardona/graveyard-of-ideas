@@ -135,7 +135,7 @@ describe('reading machine properties', () => {
           const accepted = op.kind === 'open' ? machine.open(op.guard) : false;
           if (op.kind === 'open') {
             expect(accepted).toBe(before.phase === 'closed' && canOpenBook(op.guard));
-            if (accepted) expect(machine.sequence).toEqual({ phase: 'lifting', t: 0, closePending: false });
+            if (accepted) expect(machine.sequence).toEqual({ phase: 'lifting', t: 0, closePending: false, side: 'front' });
             else expect(machine.sequence).toEqual(before);
           } else {
             apply(machine, op);

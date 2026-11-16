@@ -149,10 +149,26 @@ describe('book model', () => {
     const model = createBookModel(assets);
     const { cover, spine, pageBlock, pages } = model.parts;
     expect(new Set([cover, spine, pageBlock, pages]).size).toBe(4);
-    expect([cover, spine, pageBlock].map((part) => meshesOf(part).length)).toEqual([1, 1, 1]);
+    // The back board is a second mesh inside the page block part, so the count is 1, 1, 2, 3 (seven meshes).
+    expect([cover, spine, pageBlock].map((part) => meshesOf(part).length)).toEqual([1, 1, 2]);
     expect(meshesOf(pages)).toHaveLength(3);
     expect(model.leaves).toHaveLength(3);
-    expect(meshesOf(model.root)).toHaveLength(6);
+    expect(meshesOf(model.root)).toHaveLength(7);
+  });
+
+  it('hangs the back board in the page block part, sharing the front board geometry and cover material', () => {
+    const model = createBookModel(assets);
+    const [block, backBoard] = meshesOf(model.parts.pageBlock) as [THREE.Mesh, THREE.Mesh];
+    expect(block.geometry).toBe(assets.pageBlock);
+    expect(backBoard.geometry).toBe(assets.frontBoard);
+    expect(backBoard.material).toBe(assets.coverMaterial);
+    expect((backBoard.material as THREE.MeshStandardMaterial).map).toBe(assets.coverTexture);
+    // On the spine axis like the front board, behind the block, never overlapping the leaves.
+    expect(backBoard.parent!.position.x).toBe(model.parts.cover.position.x);
+    const backTop = worldBox(backBoard).max.z;
+    expect(backTop).toBeLessThanOrEqual(worldBox(block).min.z + 1e-9);
+    expect(backTop).toBeLessThan(worldBox(model.parts.pages).min.z);
+    expect(worldBox(backBoard).min.z).toBeCloseTo(-BOOK_SIZE.depth / 2, 6);
   });
 
   it('shares one geometry and one material between the three leaves and between books', () => {
@@ -164,14 +180,27 @@ describe('book model', () => {
     const geometries = new Set([...meshesOf(first.root), ...meshesOf(second.root)].map((mesh) => mesh.geometry));
     expect(geometries.size).toBe(4);
     expect(meshesOf(first.root).every((mesh, i) => mesh.material === meshesOf(second.root)[i]!.material)).toBe(true);
+    // The mesh count is unchanged by the end position: the inside of the back board is a material slot, not a mesh.
+    expect(meshesOf(first.root)).toHaveLength(7);
   });
 
-  it('uses the cover texture on the front board only', () => {
+  it('uses the cover texture on the front board, the back board and the inside face of the back board only', () => {
     const model = createBookModel(assets);
-    const withMap = meshesOf(model.root).filter(
-      (mesh) => (mesh.material as THREE.MeshStandardMaterial).map === assets.coverTexture,
+    const [block, backBoard] = meshesOf(model.parts.pageBlock) as [THREE.Mesh, THREE.Mesh];
+    // Changed with the end position: the page block's face toward the leaves (+z, slot 4) shows the
+    // cover material, so the inside of the back board is dark with the same border. One shared array.
+    expect(block.material).toBe(assets.pageBlockFaces);
+    const faces = block.material as THREE.MeshStandardMaterial[];
+    expect(faces).toHaveLength(6);
+    expect(faces[4]).toBe(assets.coverMaterial);
+    expect(faces.filter((face) => face !== assets.coverMaterial).every((face) => face === assets.pageBlockMaterial)).toBe(
+      true,
     );
-    expect(withMap).toEqual(meshesOf(model.parts.cover));
+    const withMap = meshesOf(model.root).filter(
+      (mesh) => !Array.isArray(mesh.material) && (mesh.material as THREE.MeshStandardMaterial).map === assets.coverTexture,
+    );
+    expect(withMap).toEqual([...meshesOf(model.parts.cover), backBoard]);
+    expect(backBoard.material).toBe(assets.coverMaterial);
   });
 
   it('sits flush with the leaf stack at angle 0 and turns about the spine axis', () => {
@@ -231,7 +260,7 @@ describe('book model', () => {
         });
         expect(reachable).toBe(true);
       });
-      expect([cover, spine, pageBlock, pages].map((part) => meshesOf(part).length)).toEqual([1, 1, 1, 3]);
+      expect([cover, spine, pageBlock, pages].map((part) => meshesOf(part).length)).toEqual([1, 1, 2, 3]);
     };
     check();
     beginLeafCurl(curl, meshesOf(model.parts.pages)[1]!);

@@ -7,7 +7,7 @@ import { PAGE_FADE_SECONDS } from './bookTimings';
 import FieldEditor from './FieldEditor';
 import { mirrorPageRect, usePageRect } from './pageRect';
 import type { PageRect } from './pageRect';
-import { PAGE_COUNT, zoneAction } from './pageTurn';
+import { END_INDEX, PAGE_COUNT, zoneAction } from './pageTurn';
 import { closeBook } from './readingBook';
 import { usePageTurnView } from './useReadingPhase';
 import { usePageDrag } from './useReadingInput';
@@ -84,17 +84,20 @@ interface BookPageOverlayProps {
  */
 export default function BookPageOverlay({ project, onResurrect }: BookPageOverlayProps) {
   const rect = usePageRect();
-  const { index, status, turning } = usePageTurnView();
+  const { index, status, turning, backDrag } = usePageTurnView();
   const surface = useRef<HTMLDivElement>(null);
   const leftSurface = useRef<HTMLDivElement>(null);
   const rightDrag = usePageDrag(() => surface.current?.getBoundingClientRect().width ?? 0, 'right');
   const leftDrag = usePageDrag(() => leftSurface.current?.getBoundingClientRect().width ?? 0, 'left');
 
   const pages = layoutPages(project, onResurrect !== undefined);
-  const page = pages[index] ?? pages[0];
+  // In the end position the last page stays the one shown in the indicator, but no content is drawn.
+  const pageIndex = Math.min(index, PAGE_COUNT - 1);
+  const page = pages[pageIndex] ?? pages[0];
   const resting = status === 'idle';
-  // The page content hides only while a leaf is moving, not for a drag that turns nothing.
-  const contentVisible = !turning;
+  const atEnd = index === END_INDEX;
+  // The page content hides while a leaf is moving (not for a drag that turns nothing) and in the end position.
+  const contentVisible = !turning && !atEnd;
   const dragging = status === 'dragging' ? 'true' : undefined;
   const grab = resting ? 'true' : undefined;
 
@@ -122,10 +125,12 @@ export default function BookPageOverlay({ project, onResurrect }: BookPageOverla
       >
         <div
           data-testid="book-page-content"
+          aria-hidden={atEnd ? 'true' : undefined}
           style={{
             ...CONTENT_STYLE,
             opacity: contentVisible ? 1 : 0,
             pointerEvents: contentVisible ? 'auto' : 'none',
+            visibility: atEnd ? 'hidden' : 'visible',
             transition: contentVisible ? `opacity ${PAGE_FADE_SECONDS}s ease-out` : 'none',
           }}
         >
@@ -140,11 +145,15 @@ export default function BookPageOverlay({ project, onResurrect }: BookPageOverla
             </button>
           )}
           <p style={{ textAlign: 'center', fontSize: '13px', margin: '16px 0 0', color: '#3a4766' }}>
-            Page {index + 1} of {PAGE_COUNT}
+            Page {pageIndex + 1} of {PAGE_COUNT}
           </p>
         </div>
       </div>
-      <button onClick={closeBook} style={CLOSE_STYLE}>
+      <button
+        onClick={closeBook}
+        data-testid="book-close-button"
+        style={{ ...CLOSE_STYLE, opacity: backDrag ? 0 : 1, pointerEvents: backDrag ? 'none' : 'auto' }}
+      >
         Close the book
       </button>
     </section>

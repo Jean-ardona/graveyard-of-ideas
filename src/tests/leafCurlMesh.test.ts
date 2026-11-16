@@ -143,7 +143,8 @@ describe('swapping the curl onto a leaf', () => {
     model.root.traverse((object) => {
       if (object instanceof THREE.Mesh) meshCount += 1;
     });
-    expect(meshCount).toBe(6);
+    // Seven meshes since the back board joined the page block part (was six).
+    expect(meshCount).toBe(7);
   });
 });
 

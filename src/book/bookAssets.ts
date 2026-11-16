@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { COLORS } from '../world/config';
-import { mergeParts, placed } from '../world/geometryUtils';
+import { placed } from '../world/geometryUtils';
 import { createCoverBorderTexture, createCoverMaterial, createLeafMaterial, createPageEdgeMaterial } from './bookLook';
 import { BOARD_THICKNESS, BOOK_DEPTH, LEAF_COUNT, LEAF_THICKNESS, restLeafZ } from './bookStack';
 
@@ -35,6 +35,8 @@ const FRONT_BOARD_Z = HALF_DEPTH - BOARD / 2;
 /** Pivot positions inside the book, for the model that assembles the parts. */
 export const BOOK_PIVOTS = {
   frontBoard: [HINGE_X, 0, FRONT_BOARD_Z],
+  /** The back board hangs on the same spine axis, behind the page block. It uses the front board geometry. */
+  backBoard: [HINGE_X, 0, -FRONT_BOARD_Z],
   leaves: Array.from({ length: LEAF_COUNT }, (_, j): [number, number, number] => [HINGE_X, 0, restLeafZ(j)]),
 } as const;
 
@@ -73,6 +75,12 @@ export interface BookAssets {
   coverMaterial: THREE.Material;
   spineMaterial: THREE.Material;
   pageBlockMaterial: THREE.Material;
+  /**
+   * Materials of the page block's six box faces: the page edge everywhere except the face toward
+   * the leaves (+z), which uses the cover material. With every leaf turned that face is the inside
+   * of the back board. No new material or texture; the entries are shared and disposed above.
+   */
+  pageBlockFaces: THREE.Material[];
   leafMaterial: THREE.Material;
   coverTexture: THREE.Texture;
   dispose(): void;
@@ -81,11 +89,8 @@ export interface BookAssets {
 export function createBookAssets(): BookAssets {
   // Front board, in the frame of its hinge: it spans from the spine to the open edge.
   const frontBoard = box(BOOK_SIZE.width - SPINE_WIDTH, BOOK_SIZE.height, BOARD, HALF_WIDTH, MIDDLE_Y, 0);
-  // The binding: spine and back board in one part.
-  const spine = mergeParts([
-    box(SPINE_WIDTH, BOOK_SIZE.height, BOOK_SIZE.depth, HINGE_X, MIDDLE_Y, 0),
-    box(BOOK_SIZE.width - SPINE_WIDTH, BOOK_SIZE.height, BOARD, SPINE_WIDTH / 2, MIDDLE_Y, -HALF_DEPTH + BOARD / 2),
-  ]);
+  // The binding. The back board is a second mesh of the front board geometry, see `createBookModel`.
+  const spine = box(SPINE_WIDTH, BOOK_SIZE.height, BOOK_SIZE.depth, HINGE_X, MIDDLE_Y, 0);
   const pageBlock = box(
     INNER_WIDTH,
     INNER_HEIGHT,
@@ -103,6 +108,16 @@ export function createBookAssets(): BookAssets {
   const pageBlockMaterial = createPageEdgeMaterial();
   const leafMaterial = createLeafMaterial();
 
+  // Box face order: +x, -x, +y, -y, +z, -z.
+  const pageBlockFaces = [
+    pageBlockMaterial,
+    pageBlockMaterial,
+    pageBlockMaterial,
+    pageBlockMaterial,
+    coverMaterial,
+    pageBlockMaterial,
+  ];
+
   return {
     frontBoard,
     spine,
@@ -111,6 +126,7 @@ export function createBookAssets(): BookAssets {
     coverMaterial,
     spineMaterial,
     pageBlockMaterial,
+    pageBlockFaces,
     leafMaterial,
     coverTexture,
     dispose() {

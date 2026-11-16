@@ -32,8 +32,9 @@ function Harness() {
 
 function resetMachine(): void {
   readingMachine.cancelDrag();
-  readingMachine.finishTurn();
   readingMachine.close();
+  // A close from the last page waits for its automatic turn; finishing it lets the close start.
+  readingMachine.finishTurn();
   readingMachine.skip();
 }
 
@@ -126,16 +127,32 @@ describe('page input', () => {
       expect(readingMachine.phase()).toBe('closing');
     });
 
-    it('closes the book when the right zone is dragged left on the last page', () => {
+    it('turns the last page into the end position when the right zone is dragged left, and closes from there', () => {
       for (let i = 0; i < 2; i++) {
         act(() => readingMachine.turnPage('next'));
         settleTurn();
       }
+      dragBy(screen.getByTestId('surface'), -40);
+      settleTurn();
+      expect(readingMachine.pages.index).toBe(3);
+      expect(readingMachine.phase()).toBe('open');
       dragBy(screen.getByTestId('surface'), -39);
       expect(readingMachine.phase()).toBe('open');
       settleTurn();
       dragBy(screen.getByTestId('surface'), -40);
       expect(readingMachine.phase()).toBe('closing');
+      expect(readingMachine.sequence.side).toBe('back');
+    });
+
+    it('turns the last page back when the left zone is dragged right in the end position', () => {
+      for (let i = 0; i < 3; i++) {
+        act(() => readingMachine.turnPage('next'));
+        settleTurn();
+      }
+      dragBy(screen.getByTestId('left'), 60);
+      settleTurn();
+      expect(readingMachine.pages.index).toBe(2);
+      expect(readingMachine.phase()).toBe('open');
     });
 
     it('does not close from a closing gesture cancelled with Escape, and arrows never close at the ends', () => {
@@ -206,9 +223,34 @@ describe('page input', () => {
       fireEvent.keyDown(document.body, { key: 'ArrowRight' });
       settleTurn();
       expect(readingMachine.pages.index).toBe(2);
+      // The last page turns into the end position; the arrow never closes the book from there.
+      fireEvent.keyDown(document.body, { key: 'ArrowRight' });
+      settleTurn();
+      expect(readingMachine.pages.index).toBe(3);
       fireEvent.keyDown(document.body, { key: 'ArrowRight' });
       expect(readingMachine.pages.status).toBe('idle');
+      expect(readingMachine.pages.index).toBe(3);
+      expect(readingMachine.phase()).toBe('open');
+      fireEvent.keyDown(document.body, { key: 'ArrowLeft' });
+      settleTurn();
       expect(readingMachine.pages.index).toBe(2);
+      expect(readingMachine.phase()).toBe('open');
+    });
+
+    it('closes from the last page by turning it first, then closing with the back board; Escape does the same', () => {
+      for (let i = 0; i < 2; i++) {
+        fireEvent.keyDown(document.body, { key: 'ArrowRight' });
+        settleTurn();
+      }
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      expect(readingMachine.phase()).toBe('open');
+      expect(readingMachine.pages.status).toBe('settling');
+      // The automatic turn is longer than a page turn settle (0.45 s against 0.3 s).
+      settleTurn();
+      settleTurn();
+      expect(readingMachine.pages.index).toBe(3);
+      expect(readingMachine.phase()).toBe('closing');
+      expect(readingMachine.sequence.side).toBe('back');
     });
 
     it('does nothing for the arrows inside an input or textarea', () => {
@@ -248,6 +290,15 @@ describe('page input', () => {
       setReducedMotion(true);
       fireEvent.keyDown(document.body, { key: 'ArrowRight' });
       expect(readingMachine.pages.index).toBe(1);
+      expect(readingMachine.pages.status).toBe('idle');
+    });
+
+    it('turns the last page and closes at once from the last page', () => {
+      setReducedMotion(true);
+      for (let i = 0; i < 2; i++) fireEvent.keyDown(document.body, { key: 'ArrowRight' });
+      expect(readingMachine.pages.index).toBe(2);
+      closeBook();
+      expect(readingMachine.phase()).toBe('closed');
       expect(readingMachine.pages.status).toBe('idle');
     });
 

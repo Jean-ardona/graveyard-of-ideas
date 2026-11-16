@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import {
+  END_INDEX,
   PAGE_COUNT,
   beginDrag,
   cancelDrag,
@@ -24,7 +25,8 @@ const WIDTH = 400;
 const FULL = WIDTH * PAGE_TURN.fullTurnRatio;
 
 const sideArb = fc.constantFrom<DragSide>('left', 'right');
-const pageArb = fc.integer({ min: 0, max: PAGE_COUNT - 1 });
+/** Every position: the pages and the end position after the last one. */
+const pageArb = fc.integer({ min: 0, max: END_INDEX });
 
 function stateAt(index: number): PageTurnState {
   const state = createPageTurnState();
@@ -121,7 +123,7 @@ describe('two drag zones', () => {
   it('Feature: graveyard-core, Property 29: Next then previous returns to the same page', () => {
     fc.assert(
       fc.property(
-        fc.integer({ min: 0, max: PAGE_COUNT - 2 }),
+        fc.integer({ min: 0, max: END_INDEX - 1 }),
         fc.integer({ min: Math.ceil(FULL * PAGE_TURN.commitThreshold), max: 700 }),
         fc.integer({ min: Math.ceil(FULL * PAGE_TURN.commitThreshold), max: 700 }),
         (index, forward, back) => {
@@ -143,7 +145,7 @@ describe('two drag zones', () => {
     fc.assert(
       fc.property(fc.boolean(), fc.integer({ min: 0, max: 700 }), (atStart, distance) => {
         const side: DragSide = atStart ? 'left' : 'right';
-        const state = stateAt(atStart ? 0 : PAGE_COUNT - 1);
+        const state = stateAt(atStart ? 0 : END_INDEX);
         const before = leafAngles(state);
         expect(zoneAction(state.index, side)).toBe('close');
 
@@ -159,7 +161,7 @@ describe('two drag zones', () => {
         settleFully(state);
 
         expect(state.status).toBe('idle');
-        expect(state.index).toBe(atStart ? 0 : PAGE_COUNT - 1);
+        expect(state.index).toBe(atStart ? 0 : END_INDEX);
         expect(state.closeRequested).toBe(distance >= FULL * PAGE_TURN.commitThreshold);
         expect(takeCloseRequest(state)).toBe(distance >= FULL * PAGE_TURN.commitThreshold);
         expect(state).toEqual(stateAt(state.index));
@@ -172,7 +174,7 @@ describe('two drag zones', () => {
     fc.assert(
       fc.property(fc.boolean(), fc.integer({ min: 0, max: 700 }), (atStart, distance) => {
         const side: DragSide = atStart ? 'left' : 'right';
-        const state = stateAt(atStart ? 0 : PAGE_COUNT - 1);
+        const state = stateAt(atStart ? 0 : END_INDEX);
         beginDrag(state, side);
         dragTo(state, along(side, distance), WIDTH);
         cancelDrag(state);
@@ -200,7 +202,7 @@ describe('two drag zones', () => {
             angles.forEach((angle, j) => expect(angle).toBe(j < state.index ? Math.PI : 0));
           }
           if (state.closeDrag) expect(state.direction).toBeNull();
-          if (state.direction === 'next') expect(state.index).toBeLessThan(PAGE_COUNT - 1);
+          if (state.direction === 'next') expect(state.index).toBeLessThan(END_INDEX);
           if (state.direction === 'prev') expect(state.index).toBeGreaterThan(0);
         }
       }),
@@ -211,8 +213,8 @@ describe('two drag zones', () => {
 
 describe('two drag zones: examples', () => {
   it('maps each side and page to its action', () => {
-    expect([0, 1, 2].map((index) => zoneAction(index, 'right'))).toEqual(['next', 'next', 'close']);
-    expect([0, 1, 2].map((index) => zoneAction(index, 'left'))).toEqual(['close', 'prev', 'prev']);
+    expect([0, 1, 2, 3].map((index) => zoneAction(index, 'right'))).toEqual(['next', 'next', 'next', 'close']);
+    expect([0, 1, 2, 3].map((index) => zoneAction(index, 'left'))).toEqual(['close', 'prev', 'prev', 'prev']);
   });
 
   it('turns the leaf of the previous page back from the left zone, in reverse', () => {
