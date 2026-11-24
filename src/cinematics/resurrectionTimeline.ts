@@ -1,11 +1,14 @@
+import { GROUP_B_TOTAL, RETURN_SECONDS, SPECTER_PHASES, SPECTER_TOTAL } from './specterTimings';
+
 /**
  * The resurrection cinematic as a list of timed steps. Pure: no React, Three.js, DOM or timers.
  * The project is already saved as Resurrected when the timeline starts; it only represents that.
  *
- * Group A (embers) is the first step. Group B (smoke, form, rise, fly, fade) starts only after A has
- * completed AND the book has disappeared: a step advances only when the previous one finished, so the
- * order cannot be broken by a large `dt`. The state, progress and effects records are created once and
- * mutated in place.
+ * Group A (embers) is the first step. Group B (gather, form, depart, vanish, return) starts only after A
+ * has completed AND the book has disappeared: a step advances only when the previous one finished, so the
+ * order cannot be broken by a large `dt`. Group B is reported as plain times (`groupBTime`, `specterTime`)
+ * that the specter and the camera evaluate; its durations come from `specterTimings` (one source).
+ * The state, progress and effects records are created once and mutated in place.
  */
 
 /** Largest step a frame may advance the timeline, in seconds. */
@@ -14,14 +17,17 @@ export const MAX_FRAME_DELTA = 0.1;
 export const BOOK_PARTS = ['cover', 'spine', 'pageBlock', 'pages'] as const;
 export type BookPartName = (typeof BOOK_PARTS)[number];
 
-/** Steps in order, with their duration in seconds (data constants, tuned on the target machine). */
+/** Seconds of the embers step (data constant, tuned on the target machine). */
+export const EMBERS_SECONDS = 3.4;
+
+/** Steps in order, with their duration in seconds. */
 export const STEPS = [
-  { id: 'embers', seconds: 3.4 },
-  { id: 'smoke', seconds: 1.4 },
-  { id: 'form', seconds: 1.4 },
-  { id: 'rise', seconds: 1.6 },
-  { id: 'fly', seconds: 2.4 },
-  { id: 'fade', seconds: 1.0 },
+  { id: 'embers', seconds: EMBERS_SECONDS },
+  { id: 'gather', seconds: SPECTER_PHASES.gather.duration },
+  { id: 'form', seconds: SPECTER_PHASES.form.duration },
+  { id: 'depart', seconds: SPECTER_PHASES.depart.duration },
+  { id: 'vanish', seconds: SPECTER_PHASES.vanish.duration },
+  { id: 'return', seconds: RETURN_SECONDS },
 ] as const;
 
 export type StepId = (typeof STEPS)[number]['id'];
@@ -30,6 +36,16 @@ export type StepId = (typeof STEPS)[number]['id'];
 export const FIRST_SPECTER_STEP = 1;
 export const STEP_COUNT = STEPS.length;
 export const TOTAL_SECONDS = STEPS.reduce((sum, step) => sum + step.seconds, 0);
+
+/** Where each step of group B starts on the `groupBTime` axis (indexed by step; entry 0 is unused). */
+const GROUP_B_STARTS: readonly number[] = [
+  0,
+  SPECTER_PHASES.gather.start,
+  SPECTER_PHASES.form.start,
+  SPECTER_PHASES.depart.start,
+  SPECTER_PHASES.vanish.start,
+  SPECTER_TOTAL,
+];
 
 /**
  * When each book part burns, as a fraction of the embers step: [start, end]. Staggered, and every
@@ -52,7 +68,7 @@ export interface ResurrectionState {
   elapsed: number;
 }
 
-/** Eased progress of every visual, each in [0, 1]. */
+/** Eased progress of the book parts, in [0, 1], and the plain times of group B. */
 export interface ResurrectionProgress {
   /** Raw progress of the embers step, for the ember field. */
   embers: number;
@@ -60,11 +76,10 @@ export interface ResurrectionProgress {
   spine: number;
   pageBlock: number;
   pages: number;
-  smoke: number;
-  form: number;
-  rise: number;
-  fly: number;
-  fade: number;
+  /** Seconds since group B opened, in [0, GROUP_B_TOTAL]. 0 until the embers are done and the book is gone. */
+  groupBTime: number;
+  /** `min(groupBTime, SPECTER_TOTAL)`: the time the specter evaluates. */
+  specterTime: number;
 }
 
 export interface ResurrectionEffects {
@@ -79,7 +94,7 @@ export function createResurrectionState(): ResurrectionState {
 }
 
 export function createResurrectionProgress(): ResurrectionProgress {
-  return { embers: 0, cover: 0, spine: 0, pageBlock: 0, pages: 0, smoke: 0, form: 0, rise: 0, fly: 0, fade: 0 };
+  return { embers: 0, cover: 0, spine: 0, pageBlock: 0, pages: 0, groupBTime: 0, specterTime: 0 };
 }
 
 export function createResurrectionEffects(): ResurrectionEffects {
@@ -123,17 +138,20 @@ function derive(state: ResurrectionState, progress: ResurrectionProgress, effect
   effects.bookGone = progress.cover === 1 && progress.spine === 1 && progress.pageBlock === 1 && progress.pages === 1;
   // Group B shows nothing until group A has completed.
   const open = state.step >= FIRST_SPECTER_STEP && effects.bookGone;
-  progress.smoke = open ? easeInOutCubic(stepFraction(state, 1)) : 0;
-  progress.form = open ? easeInOutCubic(stepFraction(state, 2)) : 0;
-  progress.rise = open ? easeInOutCubic(stepFraction(state, 3)) : 0;
-  progress.fly = open ? easeInOutCubic(stepFraction(state, 4)) : 0;
-  progress.fade = open ? easeInOutCubic(stepFraction(state, 5)) : 0;
+  if (!open) {
+    progress.groupBTime = 0;
+  } else if (state.step >= STEP_COUNT) {
+    progress.groupBTime = GROUP_B_TOTAL;
+  } else {
+    progress.groupBTime = Math.min(GROUP_B_STARTS[state.step]! + state.elapsed, GROUP_B_TOTAL);
+  }
+  progress.specterTime = Math.min(progress.groupBTime, SPECTER_TOTAL);
   effects.done = state.step >= STEP_COUNT;
 }
 
 /**
- * The final state of the sequence: every step complete, the book gone, the specter faded out, `done` set.
- * Reduced motion lands here in one tick; a later skip lands here too.
+ * The final state of the sequence: every step complete, the book gone, `groupBTime` 9.4, `specterTime`
+ * 7.8 (the specter is gone), `done` set. Reduced motion lands here in one tick; a later skip lands here too.
  */
 export function finishResurrection(
   state: ResurrectionState,

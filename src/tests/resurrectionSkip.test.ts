@@ -13,9 +13,12 @@ import {
   createResurrectionState,
   finishResurrection,
 } from '../cinematics/resurrectionTimeline';
+import { GROUP_B_TOTAL, SPECTER_TOTAL } from '../cinematics/specterTimings';
 import { attachResurrectionSkip, isLockLoss, isSkipResurrectionKey } from '../cinematics/resurrectionSkip';
 import { exportData } from '../domain';
+import { isCameraClaimed, releaseCamera } from '../interaction/cameraOverride';
 import { attachPointerTarget } from '../interaction/pointerLock';
+import { playerSession } from '../interaction/playerSession';
 import { createGraveyardStore, STORAGE_KEY } from '../store';
 import type { StorageLike } from '../store';
 import { emptyData } from '../store/persistence';
@@ -24,9 +27,13 @@ import type { TombDescriptor } from '../world/tombLogic';
 
 const TOMB: TombDescriptor = { id: 'p1', slot: 0, shape: 'rounded', title: 'Moss', x: 4, z: -6, rotation: 0.5, lean: 0, label: 'Open Moss' };
 
+/** The player stands in front of the tomb (it faces (sin 0.5, cos 0.5)) and looks somewhere else. */
+const PLAYER = { x: 4 + 2 * Math.sin(0.5), y: 1.9, z: -6 + 2 * Math.cos(0.5), yaw: 2.1, pitch: -0.2 };
+
 let assets: BookAssets;
 let handle: BookHandle;
 let scene: THREE.Scene;
+let camera: THREE.PerspectiveCamera;
 
 beforeEach(() => {
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation((() => null) as never);
@@ -35,15 +42,30 @@ beforeEach(() => {
   handle = { id: TOMB.id, root: model.root, parts: model.parts, leaves: model.leaves };
   scene = new THREE.Scene();
   scene.add(model.root);
+  camera = new THREE.PerspectiveCamera();
+  camera.rotation.order = 'YXZ';
+  camera.position.set(PLAYER.x, PLAYER.y, PLAYER.z);
+  camera.rotation.set(PLAYER.pitch, PLAYER.yaw, 0);
+  playerSession.yaw = PLAYER.yaw;
+  playerSession.pitch = PLAYER.pitch;
 });
 
 afterEach(() => {
   assets.dispose();
+  releaseCamera();
   vi.restoreAllMocks();
 });
 
 function start(instant = false) {
-  return createResurrectionRun({ scene, tomb: TOMB, book: handle, quality: 'low', instant });
+  return createResurrectionRun({ scene, camera, tomb: TOMB, book: handle, quality: 'low', instant });
+}
+
+function expectCameraAtPlayer(): void {
+  expect(camera.position.x).toBe(PLAYER.x);
+  expect(camera.position.y).toBe(PLAYER.y);
+  expect(camera.position.z).toBe(PLAYER.z);
+  expect(camera.rotation.y).toBe(PLAYER.yaw);
+  expect(camera.rotation.x).toBe(PLAYER.pitch);
 }
 
 describe('skipping the resurrection', () => {
@@ -61,8 +83,12 @@ describe('skipping the resurrection', () => {
         expect(run.progress).toEqual(progress);
         expect(run.effects).toEqual(effects);
         expect(BOOK_PARTS.every((name) => !handle.parts[name].visible)).toBe(true);
-        expect(run.assets.specter.visible).toBe(false);
-        expect(run.assets.smokeMaterial.opacity).toBe(0);
+        expect(run.progress.groupBTime).toBe(GROUP_B_TOTAL);
+        expect(run.progress.specterTime).toBe(SPECTER_TOTAL);
+        expect(run.assets.specter?.points.visible).toBe(false);
+        // The camera is back at the player's own pose and handed back to the controller.
+        expectCameraAtPlayer();
+        expect(isCameraClaimed()).toBe(false);
         run.dispose();
         // Every later tick is still the end, and a second skip changes nothing.
         expect(run.tick(0.05)).toBe(true);
@@ -93,9 +119,12 @@ describe('skipping the resurrection', () => {
     run.dispose();
 
     expect(scene.children).toHaveLength(children);
-    expect(geometry).toHaveBeenCalledTimes(1);
-    expect(material).toHaveBeenCalledTimes(3 + originals.length);
-    expect(texture).toHaveBeenCalledTimes(2);
+    // Ember geometry and specter geometry, each once.
+    expect(geometry).toHaveBeenCalledTimes(2);
+    // Ember and specter points materials plus one clone for every material slot of the book.
+    expect(material).toHaveBeenCalledTimes(2 + originals.length);
+    // The glow texture of the embers (no 2D context here, so the specter has no dot texture).
+    expect(texture).toHaveBeenCalledTimes(1);
     const restored = BOOK_PARTS.flatMap((name) => {
       const found: THREE.Material[] = [];
       handle.parts[name].traverse((o) => {
@@ -210,5 +239,20 @@ describe('reloading during the resurrection', () => {
     expect(reloaded.getHeldTombs()).toHaveLength(0);
     expect(reloaded.currentUiMode()).toBe('exploring');
     expect(storage.items.get(STORAGE_KEY)).not.toMatch(/held|running/i);
+  });
+
+  it('starts with the camera unclaimed after a reload mid-follow, and nothing replays', async () => {
+    const run = start();
+    for (let i = 0; i < 60; i++) run.tick(0.1);
+    expect(run.progress.groupBTime).toBeGreaterThan(0);
+    expect(isCameraClaimed()).toBe(true);
+
+    vi.resetModules();
+    const override = await import('../interaction/cameraOverride');
+    const session = await import('../cinematics/resurrectionSession');
+    expect(override.isCameraClaimed()).toBe(false);
+    expect(session.getHeldTombs()).toHaveLength(0);
+    expect(session.isResurrectionRunning()).toBe(false);
+    run.dispose();
   });
 });

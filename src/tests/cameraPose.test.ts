@@ -53,8 +53,9 @@ describe('camera foundation is pure data and math', () => {
 
   it('has the timing constants of the design', () => {
     expect(TIMINGS.FOLLOW_IN_SECONDS).toBe(2.0);
-    expect(TIMINGS.LOOK_LAG).toBe(0.35);
-    expect(TIMINGS.FRAME_DROP).toBe(0.8);
+    // Retuned in 13.5 so Property 88 holds from the closest reading spot.
+    expect(TIMINGS.LOOK_LAG).toBe(0.1);
+    expect(TIMINGS.FRAME_DROP).toBe(0.3);
     expect(TIMINGS.FRAME_CONE).toBe(0.45);
     expect(TIMINGS.MAX_CAMERA_RATE).toBe(3.5);
     expect(TIMINGS.RETURN_SECONDS).toBe(1.6);

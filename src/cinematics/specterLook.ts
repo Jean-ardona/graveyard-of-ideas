@@ -10,18 +10,18 @@ import { SPECTER_PHASES, SPECTER_TOTAL } from './specterTimings';
 /** Near-black body of every particle (also the center of the dot texture). */
 export const SPECTER_BODY_COLOR: string = TOKENS.color.specterBody;
 
-/** Pale blue rim, so the figure reads against the night sky. */
-export const SPECTER_RIM_COLOR: string = TOKENS.color.specterRim;
-
 /** Point size in meters per quality: a smaller budget needs bigger points to read as a mass. */
 export const SPECTER_POINT_SIZE: Readonly<Record<QualityLevel, number>> = {
-  low: 0.16,
-  medium: 0.14,
-  high: 0.12,
+  low: 0.07,
+  medium: 0.06,
+  high: 0.05,
 };
 
-/** Highest alpha of a body particle, so the figure is dark but never a flat cutout. */
-export const BODY_ALPHA = 0.9;
+/** Highest alpha of a body particle. Low on purpose: overlapping soft points build up like smoke. */
+export const BODY_ALPHA = 0.45;
+
+/** Highest alpha of a shed particle, lower than the body so the smoke stays thin. */
+export const SHED_ALPHA = 0.3;
 
 /** Share of the particles that leave the body one by one as smoke during the departure. */
 export const SHED_FRACTION = 0.35;

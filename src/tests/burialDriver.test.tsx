@@ -32,9 +32,11 @@ vi.mock('../cinematics/burialTimeline', async (importOriginal) => {
 
 import { createBookAssets } from '../book/bookAssets';
 import { registerBookHandle } from '../book/bookHandles';
-import { createBookModel } from '../book/bookModel';
+import { BOOK_REST_FOOTPRINT, createBookModel } from '../book/bookModel';
 import BurialDriver from '../cinematics/BurialDriver';
+import { HOLD_DISTANCE } from '../cinematics/burialTimings';
 import { allocateSlot } from '../domain';
+import { isCameraClaimed, releaseCamera } from '../interaction/cameraOverride';
 import { attachPointerTarget, getPointerMode } from '../interaction/pointerLock';
 import { playerSession } from '../interaction/playerSession';
 import { isRevealPending, resetRevealPending, revealPendingCount } from '../interaction/revealPending';
@@ -42,8 +44,8 @@ import { ritualMachine } from '../interaction/ritualMachine';
 import { attachRitualSession, startRitual } from '../interaction/ritualSession';
 import { appStore } from '../store/appStore';
 import { COPY } from '../ui/copy';
-import { EYE_HEIGHT, GRAVE_SLOTS } from '../world/config';
-import { terrainHeight } from '../world/terrain';
+import { GRAVE_SLOTS } from '../world/config';
+import { PLINTH } from '../world/tombAssets';
 
 const SOURCES = import.meta.glob<string>(['../cinematics/BurialDriver.tsx', '../cinematics/burialRun.ts'], {
   query: '?raw',
@@ -126,9 +128,13 @@ function mountDriver(): ReturnType<typeof render> {
   return render(<BurialDriver />);
 }
 
+/** The pose the player has when each test starts: where the camera is and which way it looks. */
+const start = { position: new THREE.Vector3(3, 1.7, -2), yaw: 0, pitch: 0 };
+
 function resetLook(): void {
   playerSession.yaw = 0;
   playerSession.pitch = 0;
+  camera.position.copy(start.position);
   camera.rotation.set(0, 0, 0);
 }
 
@@ -139,7 +145,7 @@ function removeNewProjects(): void {
 }
 
 function runToEnd(): void {
-  for (let i = 0; i < 40 && ritualMachine.phase() !== 'idle'; i += 1) frame(0.1);
+  for (let i = 0; i < 60 && ritualMachine.phase() !== 'idle'; i += 1) frame(0.1);
 }
 
 beforeEach(() => {
@@ -159,6 +165,7 @@ afterEach(() => {
   if (ritualMachine.phase() === 'writing') ritualMachine.send({ type: 'CANCEL' });
   if (ritualMachine.phase() === 'cinematic') ritualMachine.send({ type: 'DONE' });
   detachSession();
+  releaseCamera();
   removeNewProjects();
   appStore.getState().setCalmMode(false);
   resetRevealPending();
@@ -166,18 +173,25 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** Direction cosine between where the camera looks and the tomb of `slot`, seen from the player. */
-function facingSlot(slot: number): number {
+/** True when the camera shows exactly the pose the player had when the cinematic started. */
+function atPlayerPose(): boolean {
+  return (
+    camera.position.x === start.position.x &&
+    camera.position.y === start.position.y &&
+    camera.position.z === start.position.z &&
+    camera.rotation.x === start.pitch &&
+    camera.rotation.y === start.yaw
+  );
+}
+
+/** Horizontal distance from the camera to the book point of `slot`. */
+function distanceToSlab(slot: number): number {
   const place = GRAVE_SLOTS[slot];
   if (place === undefined) throw new Error('no such slot');
-  const eye = new THREE.Vector3(
-    playerSession.x,
-    terrainHeight(playerSession.x, playerSession.z) + EYE_HEIGHT,
-    playerSession.z,
-  );
-  const toTomb = new THREE.Vector3(place.x, terrainHeight(place.x, place.z) + 0.2, place.z).sub(eye).normalize();
-  const forward = new THREE.Vector3(0, 0, -1).applyEuler(camera.rotation);
-  return forward.dot(toTomb);
+  const front = PLINTH.bookZ - BOOK_REST_FOOTPRINT.length / 2;
+  const x = place.x + Math.sin(place.rotation) * front;
+  const z = place.z + Math.cos(place.rotation) * front;
+  return Math.hypot(camera.position.x - x, camera.position.z - z);
 }
 
 interface Landing {
@@ -186,12 +200,13 @@ interface Landing {
   copies: number;
   status: string | undefined;
   slot: number | undefined;
-  facing: boolean;
+  atPlayer: boolean;
+  claimed: boolean;
   sceneObjects: number;
   locked: boolean;
 }
 
-function landing(id: string, slot: number): Landing {
+function landing(id: string): Landing {
   const matches = appStore.getState().data.projects.filter((project) => project.id === id);
   return {
     phase: ritualMachine.phase(),
@@ -199,15 +214,31 @@ function landing(id: string, slot: number): Landing {
     copies: matches.length,
     status: matches[0]?.status,
     slot: matches[0]?.slot,
-    facing: facingSlot(slot) > 0.98,
+    atPlayer: atPlayerPose(),
+    claimed: isCameraClaimed(),
     sceneObjects: scene.children.length,
     locked: ritualMachine.inputLocked(),
   };
 }
 
-/** The one state every ending reaches: one resting project at its slot, facing it, flag cleared, input free. */
+/** The one state every ending reaches: one resting project at its slot, camera at the player's pose and released, flag cleared, input free. */
 function finalLanding(slot: number): Landing {
-  return { phase: 'idle', flag: false, copies: 1, status: 'resting', slot, facing: true, sceneObjects: 0, locked: false };
+  return {
+    phase: 'idle',
+    flag: false,
+    copies: 1,
+    status: 'resting',
+    slot,
+    atPlayer: true,
+    claimed: false,
+    sceneObjects: 0,
+    locked: false,
+  };
+}
+
+/** Plays whole frames of 0.1 s until `seconds` have passed. */
+function playSeconds(seconds: number): void {
+  for (let t = 0; t < seconds - 1e-9; t += 0.1) frame(0.1);
 }
 
 function freeSlot(): number {
@@ -285,7 +316,7 @@ describe('burial driver', () => {
     );
   });
 
-  it('plays turn, appear and settle, then DONE: flag cleared, camera on the slot, walking back', () => {
+  it('claims the camera, dollies to the hold spot, rests there, returns and releases it: flag cleared, walking back', () => {
     mountDriver();
     const slot = freeSlot();
     const id = commit();
@@ -293,21 +324,50 @@ describe('burial driver', () => {
     expect(ritualMachine.phase()).toBe('cinematic');
     expect(ritualMachine.inputLocked()).toBe(true);
     expect(scene.children).toHaveLength(1);
-    for (let i = 0; i < 12; i += 1) frame(0.1);
+    expect(isCameraClaimed()).toBe(true);
+    expect(atPlayerPose()).toBe(true);
+
+    playSeconds(1.0);
+    expect(atPlayerPose()).toBe(false);
+    playSeconds(1.6);
+    // Inside the hold: 3 m from the slab, camera still claimed, flag still set.
+    expect(distanceToSlab(slot)).toBeCloseTo(HOLD_DISTANCE, 4);
+    expect(isCameraClaimed()).toBe(true);
     expect(isRevealPending(id)).toBe(true);
     runToEnd();
-    expect(landing(id, slot)).toEqual(finalLanding(slot));
+    expect(landing(id)).toEqual(finalLanding(slot));
     expect(appStore.getState().data.projects.find((project) => project.id === id)?.slot).toBe(slot);
+  });
+
+  it('never writes the position, yaw or pitch of the player, whatever ends the run', () => {
+    for (const end of [(): void => runToEnd(), (): void => skipKey('Escape'), (): void => cleanup()]) {
+      resetLook();
+      const view = mountDriver();
+      playerSession.x = 4;
+      playerSession.z = -6;
+      playerSession.yaw = 0.7;
+      playerSession.pitch = -0.2;
+      const id = commit();
+      playSeconds(2.5);
+      expect(playerSession).toEqual({ x: 4, z: -6, yaw: 0.7, pitch: -0.2 });
+      end();
+      expect(playerSession).toEqual({ x: 4, z: -6, yaw: 0.7, pitch: -0.2 });
+      expect(isRevealPending(id)).toBe(false);
+      view.unmount();
+      removeNewProjects();
+      if (lockedElement === null) pointer.request();
+    }
   });
 
   it.each([['Escape'], ['Enter'], [' ']])('skips with %j to the same final state as the natural end', (key) => {
     mountDriver();
     const slot = freeSlot();
     const id = commit();
-    frame(0.1);
+    playSeconds(2.0);
+    expect(isCameraClaimed()).toBe(true);
     expect(ritualMachine.phase()).toBe('cinematic');
     skipKey(key);
-    expect(landing(id, slot)).toEqual(finalLanding(slot));
+    expect(landing(id)).toEqual(finalLanding(slot));
   });
 
   it('skips when the pointer lock is lost', () => {
@@ -316,7 +376,19 @@ describe('burial driver', () => {
     const id = commit();
     expect(getPointerMode()).toBe('locked');
     document.exitPointerLock();
-    expect(landing(id, slot)).toEqual(finalLanding(slot));
+    expect(landing(id)).toEqual(finalLanding(slot));
+  });
+
+  it('releases the camera on unmount, in the middle of the hold', () => {
+    const view = mountDriver();
+    const id = commit();
+    playSeconds(2.5);
+    expect(isCameraClaimed()).toBe(true);
+    view.unmount();
+    expect(isCameraClaimed()).toBe(false);
+    expect(atPlayerPose()).toBe(true);
+    expect(isRevealPending(id)).toBe(false);
+    expect(ritualMachine.phase()).toBe('idle');
   });
 
   it('ignores the key that sealed the page and skips on a later key', () => {
@@ -354,7 +426,7 @@ describe('burial driver', () => {
         }
         if (how === 'lock') document.exitPointerLock();
         else skipKey(how);
-        expect(landing(id, slot)).toEqual(finalLanding(slot));
+        expect(landing(id)).toEqual(finalLanding(slot));
         view.unmount();
         // A reload starts with no flag and an idle ritual.
         expect(revealPendingCount()).toBe(0);
@@ -365,14 +437,16 @@ describe('burial driver', () => {
     );
   });
 
-  it('lands on the final state in one frame with calm mode: no glow left, flag cleared', () => {
+  it('lands on the final state in one frame with calm mode: camera never claimed, no glow left, flag cleared', () => {
     appStore.getState().setCalmMode(true);
     mountDriver();
     const slot = freeSlot();
     const id = commit();
+    expect(isCameraClaimed()).toBe(false);
+    expect(atPlayerPose()).toBe(true);
     frame(0.016);
     expect(rig.ticks).toBe(1);
-    expect(landing(id, slot)).toEqual(finalLanding(slot));
+    expect(landing(id)).toEqual(finalLanding(slot));
   });
 
   it('asks for the pointer again after the end, and a refusal falls to "Click to resume"', () => {
@@ -404,7 +478,10 @@ describe('burial driver', () => {
     const unregister = registerBookHandle({ id, root: model.root, parts: model.parts, leaves: model.leaves });
     frame(0.1);
     expect(model.root.visible).toBe(false);
-    for (let i = 0; i < 14; i += 1) frame(0.1);
+    // The book stays hidden during the dolly and shows once the hold starts.
+    playSeconds(1.5);
+    expect(model.root.visible).toBe(false);
+    playSeconds(0.8);
     expect(model.root.visible).toBe(true);
     expect(isRevealPending(id)).toBe(true);
     runToEnd();

@@ -4,14 +4,14 @@ import { TOKENS } from '../ui/theme/tokens';
 import { createGlowTexture } from '../world/glowTexture';
 
 /**
- * What the burial cinematic adds to the scene: one additive glow sprite in a cool pale blue-white (a
- * token of the night palette, never amber: amber belongs to the resurrection embers), and a reveal of
+ * What the burial cinematic adds to the scene: one additive glow sprite in a pale blue-white (the
+ * `revealGlow` token, never amber: amber belongs to the resurrection embers), and a reveal of
  * the tomb's own book on per-mesh clones of the shared materials. No light, no shadow caster. The sprite
  * reuses the glow helper texture; `dispose()` frees the sprite material, the texture and the clones.
  */
 
 /** Colour of the glow and of the book tint. */
-export const BURIAL_GLOW_COLOR = TOKENS.color.mist;
+export const BURIAL_GLOW_COLOR = TOKENS.color.revealGlow;
 /** Highest sprite opacity, and the extra emissive strength of the book at the brightest moment. */
 const GLOW_PEAK = 0.75;
 const TINT_STRENGTH = 0.9;

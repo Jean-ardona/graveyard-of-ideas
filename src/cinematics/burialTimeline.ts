@@ -1,26 +1,36 @@
+import { smoothstep } from './cameraPose';
+import {
+  APPEAR_SECONDS,
+  DOLLY_IN,
+  GLOW_FADE_SECONDS,
+  GLOW_FADE_START,
+  HOLD_END,
+  RETURN,
+  TOTAL_SECONDS,
+} from './burialTimings';
+
 /**
  * The burial cinematic as a timeline. Pure: no React, Three.js, DOM, store or timers.
  * The project is already saved when the timeline starts; it only represents that state, so there is
  * no data effect here and the effects record is just `{ done }`.
  *
- * The timeline, its progress record and its effects record are created once and mutated in place.
+ * Every progress value is a function of `elapsed` alone. The timeline, its progress record and its
+ * effects record are created once and mutated in place.
  */
-
-/** Seconds of each step (data constants, tuned on the target machine). */
-export const TURN = 1.2;
-export const APPEAR = 1.0;
-export const SETTLE = 0.8;
-export const TOTAL_SECONDS = TURN + APPEAR + SETTLE;
 
 /** Largest step a frame may advance the timeline, in seconds. */
 export const MAX_FRAME_DELTA = 0.1;
 
-/** Eased progress of every visual, each in [0, 1]. `glow` rises with the appear step and fades in the settle step. */
+/**
+ * Eased progress of every visual, each in [0, 1]. `dolly` is the travel to the hold spot, `appear` the
+ * book rising over the first `APPEAR_SECONDS` of the hold, `glow` follows `appear` and falls to 0 over
+ * the last `GLOW_FADE_SECONDS` of the hold, and `back` is the travel back to the player.
+ */
 export interface BurialProgress {
-  turn: number;
+  dolly: number;
   appear: number;
   glow: number;
-  settle: number;
+  back: number;
 }
 
 export interface BurialEffects {
@@ -42,14 +52,6 @@ export function burialDuration(instant: boolean): number {
   return instant ? 0 : TOTAL_SECONDS;
 }
 
-function clamp01(value: number): number {
-  return value > 0 ? Math.min(value, 1) : 0;
-}
-
-function easeInOutCubic(x: number): number {
-  return x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
-}
-
 /** A frame step: invalid or negative values count as zero, large ones are clamped. */
 export function clampDelta(dt: number): number {
   return dt > 0 ? Math.min(dt, MAX_FRAME_DELTA) : 0;
@@ -58,14 +60,20 @@ export function clampDelta(dt: number): number {
 /** Writes progress and effects from the elapsed time alone. */
 function derive(timeline: BurialTimeline): void {
   const { elapsed, progress, effects } = timeline;
-  const appear = clamp01((elapsed - TURN) / APPEAR);
-  const settle = clamp01((elapsed - TURN - APPEAR) / SETTLE);
   const done = elapsed >= timeline.duration;
-  // A timeline of length 0 is already at its end: every step is complete.
-  progress.turn = done ? 1 : easeInOutCubic(clamp01(elapsed / TURN));
-  progress.appear = done ? 1 : easeInOutCubic(appear);
-  progress.settle = done ? 1 : easeInOutCubic(settle);
-  progress.glow = done ? 0 : settle > 0 ? 1 - progress.settle : progress.appear;
+  if (done) {
+    // A timeline of length 0 is already at its end: every step is complete and the glow is gone.
+    progress.dolly = 1;
+    progress.appear = 1;
+    progress.glow = 0;
+    progress.back = 1;
+  } else {
+    const appear = smoothstep((elapsed - DOLLY_IN) / APPEAR_SECONDS);
+    progress.dolly = smoothstep(elapsed / DOLLY_IN);
+    progress.appear = appear;
+    progress.glow = appear * (1 - smoothstep((elapsed - GLOW_FADE_START) / GLOW_FADE_SECONDS));
+    progress.back = smoothstep((elapsed - HOLD_END) / RETURN);
+  }
   effects.done = done;
 }
 
@@ -73,7 +81,7 @@ export function createBurialTimeline(instant = false): BurialTimeline {
   const timeline: BurialTimeline = {
     elapsed: 0,
     duration: burialDuration(instant),
-    progress: { turn: 0, appear: 0, glow: 0, settle: 0 },
+    progress: { dolly: 0, appear: 0, glow: 0, back: 0 },
     effects: { done: false },
   };
   derive(timeline);

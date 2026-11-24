@@ -6,7 +6,8 @@ import type { BookAssets } from '../book/bookAssets';
 import { createBookModel } from '../book/bookModel';
 import type { BookHandle } from '../book/bookHandles';
 import { BURIAL_GLOW_COLOR, createBookReveal, createBurialGlow } from '../cinematics/burialAssets';
-import { isAmberHue } from '../ui/theme/colorMath';
+import { hexToRgb, hueOf, isAmberHue } from '../ui/theme/colorMath';
+import { TOKENS } from '../ui/theme/tokens';
 
 const SOURCES = import.meta.glob<string>(['../cinematics/burial*.ts', '../cinematics/BurialDriver.tsx'], {
   query: '?raw',
@@ -36,6 +37,37 @@ function materialsOf(root: THREE.Object3D): THREE.Material[] {
   });
   return found;
 }
+
+describe('burial glow color', () => {
+  it('is the revealGlow token, pale blue-white, never amber and never mist', () => {
+    expect(TOKENS.color.revealGlow).toBe('#e4eeff');
+    expect(BURIAL_GLOW_COLOR).toBe(TOKENS.color.revealGlow);
+    expect(BURIAL_GLOW_COLOR).not.toBe(TOKENS.color.mist);
+    expect(isAmberHue(BURIAL_GLOW_COLOR)).toBe(false);
+    const hue = hueOf(BURIAL_GLOW_COLOR);
+    expect(hue).toBeGreaterThanOrEqual(200);
+    expect(hue).toBeLessThanOrEqual(250);
+    const [r, g, b] = hexToRgb(BURIAL_GLOW_COLOR);
+    expect(b).toBeGreaterThanOrEqual(r);
+    expect(b).toBeGreaterThanOrEqual(g);
+    const lightness = (Math.max(r, g, b) + Math.min(r, g, b)) / 2 / 255;
+    expect(lightness).toBeGreaterThanOrEqual(0.85);
+  });
+
+  it('is the color of the sprite material and of the book emissive tint', () => {
+    const expected = new THREE.Color(BURIAL_GLOW_COLOR);
+    const glow = createBurialGlow();
+    expect(glow.material.color.equals(expected)).toBe(true);
+    glow.dispose();
+    const reveal = createBookReveal(handle);
+    const tinted = materialsOf(handle.root).filter(
+      (material): material is THREE.MeshStandardMaterial => material instanceof THREE.MeshStandardMaterial,
+    );
+    expect(tinted.length).toBeGreaterThan(0);
+    for (const material of tinted) expect(material.emissive.equals(expected)).toBe(true);
+    reveal.dispose();
+  });
+});
 
 describe('burial glow', () => {
   it('is one additive sprite in a pale blue-white outside the amber range, with no light', () => {
@@ -114,7 +146,7 @@ describe('book reveal', () => {
 describe('burial sources', () => {
   it('add no light and no shadow caster', () => {
     const entries = Object.entries(SOURCES);
-    expect(entries.length).toBeGreaterThanOrEqual(4);
+    expect(entries.length).toBeGreaterThanOrEqual(6);
     for (const [file, source] of entries) {
       const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
       expect(code, file).not.toMatch(/\b(PointLight|SpotLight|DirectionalLight|AmbientLight|HemisphereLight|pointLight|spotLight)\b/);
@@ -125,6 +157,7 @@ describe('burial sources', () => {
   it('keep amber out of the burial colors', () => {
     for (const [file, source] of Object.entries(SOURCES)) {
       expect(source, file).not.toMatch(/TOKENS\.ember|#ff[0-9a-f]{4}/i);
+      expect(source, file).not.toMatch(/\bember[A-Z]\w*|color\.mist\b/);
     }
   });
 });

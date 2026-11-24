@@ -49,11 +49,3 @@ export function lookAtSlot(eye: Point3, target: Point3, start: Look, out: Look):
   out.pitch = Math.max(-MAX_LOOK_PITCH, Math.min(MAX_LOOK_PITCH, finiteOr(pitch, 0)));
   return out;
 }
-
-/** Writes into `out` the look a fraction `t` (clamped to [0, 1]) of the way from `from` to `to`. */
-export function turnLook(from: Look, to: Look, t: number, out: Look): Look {
-  const k = t > 0 ? Math.min(t, 1) : 0;
-  out.yaw = from.yaw + (to.yaw - from.yaw) * k;
-  out.pitch = from.pitch + (to.pitch - from.pitch) * k;
-  return out;
-}

@@ -122,13 +122,55 @@ Page-count semantics changed with the end position: `index` runs from 0 to `END_
 - On creating a new file in src/world or src/cinematics: remind to dispose geometries/materials and add cleanup.
 - Before commit: check that .gitignore does not exclude .kiro, and that LICENSE exists.
 
-## 4. Write-up outline (Kiro usage section)
-- Which Kiro apps you used and how they differed.
-- Spec-driven development: how requirements (EARS) became design and tasks, and how this compared to vibe coding.
-- Steering: which files (product, tech, structure, hackathon) made the biggest difference.
-- Hooks: the workflows automated above and their effect.
-- Property-based testing: which invariants (P1-P9), and any bug it caught.
-- Honest limits: what you did not use.
+## 4. Write-up outline (follows the five judging criteria)
+For each criterion: the claim, then the evidence in the repo and in the demo.
+
+### Potential Impact
+- Claim: abandoned projects are common, and a calm place to keep them and restart one with a realistic first step is useful beyond the hackathon.
+- Repo: `product.md` (core loop, no guilt, no penalties), requirement 5.1 (resurrection needs a next action), the simple non-3D path, local-only data with export and import.
+- Demo: bury a real idea, come back to it, resurrect it with one next action, find it in the grimoire.
+
+### Technological Implementation
+- Spec: `graveyard-core` (requirements in EARS, design with numbered properties, tasks run one per session).
+- Steering: `product.md`, `tech.md`, `structure.md`, `hackathon.md`.
+- Hooks: Perf and Cleanup Review (save in `src/world`, `src/cinematics`), Log Completed Task (tasks.md saved, appends to `docs/KIRO_LOG.md`), Low Quality Render Reminder (save in `src/book`, `src/cinematics`, `src/world`), Pre-submission check (manual).
+- Property-based testing: 89 properties in this playbook (P1 to P89). The suite has 70 distinct tagged properties (`Feature: graveyard-core, Property N`, design numbers 1 to 85), 118 `fc.assert` calls and 664 tests in 72 files. These are static counts from the source on 2026-11-24. Re-run `npx vitest --run` and record the passing total before submitting.
+- Sub-agents: to fill in. `docs/KIRO_LOG.md` does not record which sessions used sub-agents.
+- Where Kiro surprised us (from `docs/KIRO_LOG.md`):
+  - The cover-scrub property with NaN input found that `dragTo` turned a NaN distance into NaN progress (a real bug, now fixed).
+  - Writing "both sides" generators for the two drag zones showed that the older tests dragged "previous" from the wrong page.
+  - While coding the curved page, Kiro found that the design's hinge rotation of 0 would make the leaf jump and cut the cover, and corrected it (`f * (pi - turnedLeafAngle(j))`).
+  - The mesh comparison test caught a wrong strip origin in the first draft of the curl.
+  - The first run of the book axis test failed: the test ignored the board thickness, and the code was right.
+- Demo: skip a cinematic mid-way and reload mid-way, both landing on the correct state. Show the test run and the `.kiro` folder.
+
+### Design
+- Claim: the haunted theme carries the function, and reading and writing stay legible.
+- Repo: the subsection "How the spookiness serves function" below; contrast and copy-tone properties (P56, P58); comfort flags (P63); amber reserved for resurrection (P88); Low quality as the default.
+- Demo: the closed book on its tomb, the book opening and turning pages, the embers and the specter, calm mode.
+
+### Innovation
+- Claim: other graveyard apps are generated from a GitHub profile. This one is personal and first-person, the book physically leaves its tomb, and resurrection is a real status change that needs a next action.
+- Repo: section 5 below; the burial ritual and resurrection properties (P77 to P89).
+- Demo: the full loop from burial to grimoire in one continuous take.
+
+### Presentation
+- Claim: one clear loop, shown on the target machine, in under 3 minutes.
+- Repo: README (setup, controls, license), this write-up, `docs/ASSETS.md` (every asset licensed).
+- Demo: the script below, English subtitles, no copyrighted music.
+
+### 3-minute demo script
+| Time | Shot | Point to make |
+| --- | --- | --- |
+| 0:00-0:15 | Title, then the gate at night | A graveyard for abandoned projects |
+| 0:15-0:35 | Entrance voice with subtitles, first steps | Onboarding is part of the world, and it can be skipped |
+| 0:35-1:05 | Burial ritual: write the idea, seal it, the book lands on its tomb | Data is saved first, then the cinematic plays |
+| 1:05-1:35 | Walk to a tomb, open the book, turn pages, drag the cover closed | Reading stays simple and legible |
+| 1:35-2:05 | Add a next action, resurrect: embers, specter flies away | Resurrection is a real status change |
+| 2:05-2:20 | Grimoire in the hut: the project is listed as Resurrected | Not deleted, not duplicated |
+| 2:20-2:30 | Skip a cinematic, reload, the state is correct | Animations never block |
+| 2:30-2:50 | Kiro: spec, steering, hooks, tests passing | How it was built |
+| 2:50-2:58 | Closing line and repo URL | |
 
 ### How the spookiness serves function (write-up outline)
 Judges ask whether the haunted theme enhances the function. One line per element, each with the concrete feature it maps to:

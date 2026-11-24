@@ -20,17 +20,20 @@ interface Active {
 
 /**
  * Plays the burial cinematic in the 3D scene. It starts only on COMMIT_OK, when the project is already
- * saved and its id is in the reveal-pending flag; it never writes project data. In `useFrame` it ticks
- * the timeline and writes the camera look. At the end, on skip (Escape, Enter or Space, or a lost
- * pointer lock) and on unmount it disposes the glow, clears the flag, sends DONE and asks for the
- * pointer again. A reload never replays: the flag is not persisted and the machine starts idle.
+ * saved and its id is in the reveal-pending flag; it never writes project data. The run claims the
+ * camera with the player's pose captured once (the player's own position, yaw and pitch are never
+ * written). In `useFrame` it ticks the timeline, which writes the dolly pose into the camera in
+ * place. At the end, on skip (Escape, Enter or Space, or a lost pointer lock) and on unmount the run
+ * releases the camera, which shows the player's own pose again; the driver then disposes the glow,
+ * clears the flag, sends DONE and asks for the pointer again. A reload never replays: the flag is not
+ * persisted and the machine starts idle.
  */
 export default function BurialDriver() {
   const scene = useThree((state) => state.scene);
   const camera = useThree((state) => state.camera);
   const activeRef = useRef<Active | null>(null);
 
-  /** Disposes the run, shows the book, ends the ritual (which gives walking back) and asks for the pointer. */
+  /** Releases the camera, disposes the run, shows the book, ends the ritual (which gives walking back) and asks for the pointer. */
   const finish = useCallback(() => {
     const active = activeRef.current;
     if (active === null) return;

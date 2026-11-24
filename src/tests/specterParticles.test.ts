@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import * as CAMERA_TIMINGS from '../cinematics/cameraTimings';
 import {
+  BODY_ALPHA,
   SPECTER_BODY_COLOR,
   SPECTER_POINT_SIZE,
-  SPECTER_RIM_COLOR,
+  SHED_ALPHA,
   SHED_FRACTION,
   SHED_LIFE,
 } from '../cinematics/specterLook';
@@ -25,7 +26,7 @@ import {
   SPECTER_PHASES,
   SPECTER_TOTAL,
 } from '../cinematics/specterTimings';
-import { hexToRgb, hueOf, isAmberHue, relativeLuminance } from '../ui/theme/colorMath';
+import { hexToRgb, isAmberHue, relativeLuminance } from '../ui/theme/colorMath';
 import { TEXT_TOKENS, TOKENS } from '../ui/theme/tokens';
 
 const PURE_SOURCES = import.meta.glob<string>(
@@ -84,9 +85,9 @@ const headingArb = fc.oneof(
 );
 const smallCountArb = fc.integer({ min: 0, max: 80 });
 const anyCountArb = fc.oneof(
-  fc.integer({ min: -50, max: 2000 }),
+  fc.integer({ min: -50, max: SPECTER_MAX_PARTICLES + 500 }),
   fc.double({ noNaN: false }),
-  fc.constantFrom(Number.NaN, Infinity, -Infinity, 800, 801),
+  fc.constantFrom(Number.NaN, Infinity, -Infinity, SPECTER_MAX_PARTICLES, SPECTER_MAX_PARTICLES + 1),
 );
 
 function evaluate(count: number, time: number, heading: number) {
@@ -143,23 +144,24 @@ describe('specter constants', () => {
     expect(GROUP_B_TOTAL).toBeCloseTo(9.4, 12);
   });
 
-  it('has the budgets and point sizes of the design', () => {
-    expect(SPECTER_BUDGET).toEqual({ low: 400, medium: 600, high: 800 });
-    expect(SPECTER_MAX_PARTICLES).toBe(800);
-    expect(SPECTER_POINT_SIZE).toEqual({ low: 0.16, medium: 0.14, high: 0.12 });
+  it('keeps budgets and point sizes ordered by quality, within the cap, and the alphas soft', () => {
+    expect(SPECTER_BUDGET.low).toBeLessThan(SPECTER_BUDGET.medium);
+    expect(SPECTER_BUDGET.medium).toBeLessThan(SPECTER_BUDGET.high);
+    expect(SPECTER_BUDGET.high).toBeLessThanOrEqual(SPECTER_MAX_PARTICLES);
+    expect(SPECTER_POINT_SIZE.low).toBeGreaterThan(SPECTER_POINT_SIZE.medium);
+    expect(SPECTER_POINT_SIZE.medium).toBeGreaterThan(SPECTER_POINT_SIZE.high);
+    expect(BODY_ALPHA).toBeGreaterThanOrEqual(0.35);
+    expect(BODY_ALPHA).toBeLessThanOrEqual(0.55);
+    expect(SHED_ALPHA).toBeGreaterThan(0);
+    expect(SHED_ALPHA).toBeLessThan(BODY_ALPHA);
   });
 
-  it('takes the body and rim colors from tokens that are not amber and not text', () => {
+  it('takes the body color from a token that is not amber and not text', () => {
     expect(SPECTER_BODY_COLOR).toBe(TOKENS.color.specterBody);
-    expect(SPECTER_RIM_COLOR).toBe(TOKENS.color.specterRim);
     const [br, bg, bb] = hexToRgb(SPECTER_BODY_COLOR);
     expect(Math.max(br, bg, bb)).toBeLessThan(0x20);
     expect(relativeLuminance(SPECTER_BODY_COLOR)).toBeLessThan(0.01);
-    const [rr, , rb] = hexToRgb(SPECTER_RIM_COLOR);
-    expect(rb).toBeGreaterThan(rr);
-    expect(hueOf(SPECTER_RIM_COLOR)).toBeGreaterThan(190);
-    expect(hueOf(SPECTER_RIM_COLOR)).toBeLessThan(260);
-    for (const token of ['specterBody', 'specterRim'] as const) expect(TEXT_TOKENS).not.toContain(token);
+    expect(TEXT_TOKENS).not.toContain('specterBody');
   });
 });
 
@@ -173,7 +175,7 @@ describe('specter particles', () => {
         for (const alpha of alphas) {
           expect(Number.isFinite(alpha)).toBe(true);
           expect(alpha).toBeGreaterThanOrEqual(0);
-          expect(alpha).toBeLessThanOrEqual(1);
+          expect(alpha).toBeLessThanOrEqual(BODY_ALPHA + 1e-6);
         }
         expect(active).toBe(alphas.filter((alpha) => alpha > 0).length);
       }),
@@ -272,9 +274,8 @@ describe('specter particles', () => {
       { numRuns: 100 },
     );
 
-    // The colors are outside the amber hue range: body, rim and the white rgb of the buffers.
+    // The colors are outside the amber hue range: body and the white rgb of the buffers.
     expect(isAmberHue(SPECTER_BODY_COLOR)).toBe(false);
-    expect(isAmberHue(SPECTER_RIM_COLOR)).toBe(false);
     const buffers = createSpecterBuffers(10);
     expect(isAmberHue('#ffffff')).toBe(false);
     for (let i = 0; i < buffers.count; i++) {
@@ -347,7 +348,7 @@ describe('specter particles', () => {
   });
 
   it('sheds about one third of the particles, and every shed life ends by SPECTER_TOTAL', () => {
-    const seeds = createSpecterSeeds(800);
+    const seeds = createSpecterSeeds(SPECTER_MAX_PARTICLES);
     let shed = 0;
     for (let i = 0; i < seeds.count; i++) {
       const time = seeds.traits[i * SPECTER_TRAITS.stride + SPECTER_TRAITS.shed]!;
@@ -362,20 +363,34 @@ describe('specter particles', () => {
   });
 
   it('has nearly nothing left an instant before the end', () => {
-    const { buffers } = evaluate(400, SPECTER_TOTAL - 1e-6, 0.4);
+    const { buffers } = evaluate(SPECTER_BUDGET.low, SPECTER_TOTAL - 1e-6, 0.4);
     for (const alpha of alphasOf(buffers)) expect(alpha).toBeLessThan(1e-3);
   });
 
   it('shows a formed specter in the middle and nothing at the first instant', () => {
-    expect(evaluate(400, 3.3, 0.4).active).toBe(400);
-    expect(evaluate(400, 0.001, 0.4).active).toBeLessThan(5);
-    expect(evaluate(400, 5, 0.4).active).toBeGreaterThan(200);
+    const n = SPECTER_BUDGET.low;
+    expect(evaluate(n, 3.3, 0.4).active).toBe(n);
+    expect(evaluate(n, 0.001, 0.4).active).toBeLessThan(n * 0.02);
+    expect(evaluate(n, 5, 0.4).active).toBeGreaterThan(n / 2);
+  });
+
+  it('keeps the body alpha in the soft band and the shed smoke below it', () => {
+    const n = SPECTER_BUDGET.low;
+    const { seeds, buffers } = evaluate(n, 3.3, 0.4);
+    expect(Math.max(...alphasOf(buffers))).toBeLessThanOrEqual(BODY_ALPHA + 1e-6);
+    expect(Math.max(...alphasOf(buffers))).toBeGreaterThan(BODY_ALPHA * 0.9);
+    // Just after the earliest shed time, shed particles are at most SHED_ALPHA.
+    const later = evaluate(n, 4.0, 0.4).buffers;
+    for (let i = 0; i < seeds.count; i++) {
+      const shedTime = seeds.traits[i * SPECTER_TRAITS.stride + SPECTER_TRAITS.shed]!;
+      if (shedTime > 0 && shedTime <= 4.0) expect(later.colors[i * 4 + 3]!).toBeLessThanOrEqual(SHED_ALPHA + 1e-6);
+    }
   });
 
   it('moves the whole cloud away from the tomb front, along the heading turned around, while it departs', () => {
     const heading = 0.9;
-    const early = evaluate(200, 3.4, heading).buffers;
-    const late = evaluate(200, 6, heading).buffers;
+    const early = evaluate(SPECTER_BUDGET.low, 3.4, heading).buffers;
+    const late = evaluate(SPECTER_BUDGET.low, 6, heading).buffers;
     const mean = (buffers: SpecterBuffers) => {
       let x = 0;
       let z = 0;

@@ -10,6 +10,7 @@ import {
   HOVER_START,
   JITTER_AMPLITUDE,
   SHED_DRIFT,
+  SHED_ALPHA,
   SHED_EARLIEST,
   SHED_FRACTION,
   SHED_LATEST,
@@ -229,7 +230,7 @@ export function writeSpecter(seeds: SpecterSeeds, specterTime: number, heading: 
     if (shedTime > 0 && specterTime >= shedTime) {
       const age = specterTime - shedTime;
       bodyTime = shedTime;
-      alpha = age >= SHED_LIFE ? 0 : BODY_ALPHA * (1 - age / SHED_LIFE);
+      alpha = age >= SHED_LIFE ? 0 : SHED_ALPHA * (1 - age / SHED_LIFE);
       driftX = WIND.x * SHED_DRIFT * age;
       driftY = SHED_RISE * age;
       driftZ = WIND.z * SHED_DRIFT * age;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { MAX_LOOK_PITCH, lookAtSlot, shortestAngle, turnLook } from '../cinematics/lookAtSlot';
+import { MAX_LOOK_PITCH, lookAtSlot, shortestAngle } from '../cinematics/lookAtSlot';
 import type { Look, Point3 } from '../cinematics/lookAtSlot';
 
 const anyNumber = fc.oneof(
@@ -65,16 +65,5 @@ describe('lookAtSlot', () => {
       }),
       { numRuns: 200 },
     );
-  });
-
-  it('turnLook goes from the start to the target and clamps the fraction', () => {
-    const from = { yaw: 1, pitch: 0 };
-    const to = { yaw: 3, pitch: 0.4 };
-    const out = { yaw: 0, pitch: 0 };
-    expect(turnLook(from, to, 0, out)).toEqual(from);
-    expect(turnLook(from, to, 1, out)).toEqual(to);
-    expect(turnLook(from, to, 7, out)).toEqual(to);
-    expect(turnLook(from, to, Number.NaN, out)).toEqual(from);
-    expect(turnLook(from, to, 0.5, out)).toEqual({ yaw: 2, pitch: 0.2 });
   });
 });

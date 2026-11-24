@@ -5,10 +5,19 @@ import { SPECTER_MAX_PARTICLES } from '../cinematics/specterTimings';
 
 /** Counts of every kind: negative, NaN, infinite, fractional and above the cap. */
 const countArb = fc.oneof(
-  fc.integer({ min: -50, max: 2000 }),
+  fc.integer({ min: -50, max: SPECTER_MAX_PARTICLES + 1200 }),
   fc.double({ noNaN: false }),
-  fc.double({ min: -5, max: 1000, noNaN: true }),
-  fc.constantFrom(Number.NaN, Infinity, -Infinity, 0, -0, 799.9, 800, 801),
+  fc.double({ min: -5, max: SPECTER_MAX_PARTICLES + 200, noNaN: true }),
+  fc.constantFrom(
+    Number.NaN,
+    Infinity,
+    -Infinity,
+    0,
+    -0,
+    SPECTER_MAX_PARTICLES - 0.1,
+    SPECTER_MAX_PARTICLES,
+    SPECTER_MAX_PARTICLES + 1,
+  ),
 );
 
 function filled(): Float32Array {
@@ -22,7 +31,7 @@ function sameBytes(a: Float32Array, b: Float32Array): boolean {
 describe('specter silhouette', () => {
   it('Feature: graveyard-core, Property 81: The silhouette is deterministic, finite and driven by the count alone', () => {
     fc.assert(
-      fc.property(countArb, fc.integer({ min: 0, max: 800 }), fc.integer({ min: 0, max: 800 }), (count, a, b) => {
+      fc.property(countArb, fc.integer({ min: 0, max: SPECTER_MAX_PARTICLES }), fc.integer({ min: 0, max: SPECTER_MAX_PARTICLES }), (count, a, b) => {
         const n = silhouetteCount(count);
         expect(Number.isInteger(n)).toBe(true);
         expect(n).toBeGreaterThanOrEqual(0);
@@ -64,24 +73,24 @@ describe('specter silhouette', () => {
     expect(silhouetteCount(Number.NaN)).toBe(0);
     expect(silhouetteCount(-3)).toBe(0);
     expect(silhouetteCount(-Infinity)).toBe(0);
-    expect(silhouetteCount(Infinity)).toBe(800);
-    expect(silhouetteCount(799.9)).toBe(799);
-    expect(silhouetteCount(5000)).toBe(800);
-    expect(silhouetteCount(400)).toBe(400);
+    expect(silhouetteCount(Infinity)).toBe(SPECTER_MAX_PARTICLES);
+    expect(silhouetteCount(SPECTER_MAX_PARTICLES - 0.1)).toBe(SPECTER_MAX_PARTICLES - 1);
+    expect(silhouetteCount(SPECTER_MAX_PARTICLES * 2)).toBe(SPECTER_MAX_PARTICLES);
+    expect(silhouetteCount(SPECTER_MAX_PARTICLES / 2)).toBe(SPECTER_MAX_PARTICLES / 2);
   });
 
   it('writes only what fits in a short output array', () => {
     const out = new Float32Array(9);
-    expect(writeSilhouette(800, out)).toBe(3);
+    expect(writeSilhouette(SPECTER_MAX_PARTICLES, out)).toBe(3);
   });
 
   it('stands about 2.4 m high, wider at the hem than at the hood, with a hollow face', () => {
     const out = new Float32Array(SPECTER_MAX_PARTICLES * 3);
-    writeSilhouette(800, out);
+    writeSilhouette(SPECTER_MAX_PARTICLES, out);
     let top = 0;
     let hemWidth = 0;
     let hoodWidth = 0;
-    for (let i = 0; i < 800; i++) {
+    for (let i = 0; i < SPECTER_MAX_PARTICLES; i++) {
       const x = Math.abs(out[i * 3]!);
       const y = out[i * 3 + 1]!;
       top = Math.max(top, y);

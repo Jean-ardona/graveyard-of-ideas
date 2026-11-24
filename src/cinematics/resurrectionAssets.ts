@@ -1,20 +1,22 @@
 import * as THREE from 'three';
 import { createGlowTexture } from '../world/glowTexture';
-import { RESURRECTION_BUDGET, createEmberField, createSmokeField } from './resurrectionVisuals';
-import type { EmberField, SmokeField } from './resurrectionVisuals';
+import { RESURRECTION_BUDGET, createEmberField } from './resurrectionVisuals';
+import type { EmberField } from './resurrectionVisuals';
 import type { QualityLevel } from '../domain/types';
+import { createSpecterBuffers, createSpecterSeeds } from './specterParticles';
+import type { SpecterBuffers, SpecterSeeds } from './specterParticles';
+import { SpecterPoints } from './specterPoints';
+import { SPECTER_BUDGET } from './specterTimings';
 
 /**
- * Everything the resurrection adds to the scene: one ember point cloud, a few smoke puffs sharing one
- * material, and one specter sprite. No light, no shadow caster, no post-processing. All of it hangs
- * under one group so the run can remove it in a single step, and `dispose()` frees every geometry,
- * material and texture it made.
+ * Everything the resurrection adds to the scene: one ember point cloud. No light, no shadow caster,
+ * no post-processing. It hangs under one group so the run can remove it in a single step, and
+ * `dispose()` frees every geometry, material and texture it made.
+ *
+ * The specter is one more `Points` object (two draw calls in all). With reduced motion or calm mode
+ * (`instant`) none is created: the sequence lands on its final state in one tick.
  */
 
-const SPECTER_TEXTURE_WIDTH = 64;
-const SPECTER_TEXTURE_HEIGHT = 96;
-/** Near-black smoke and silhouette; the silhouette gets a faint cold rim so it reads against the night. */
-const SMOKE_COLOR = 0x07070b;
 const EMBER_POINT_SIZE = 0.11;
 
 export interface ResurrectionAssets {
@@ -24,50 +26,18 @@ export interface ResurrectionAssets {
   readonly emberPoints: THREE.Points;
   readonly emberPositions: THREE.BufferAttribute;
   readonly emberColors: THREE.BufferAttribute;
-  readonly smoke: SmokeField;
-  readonly puffs: readonly THREE.Sprite[];
-  readonly smokeMaterial: THREE.SpriteMaterial;
-  readonly specter: THREE.Sprite;
-  readonly specterMaterial: THREE.SpriteMaterial;
+  /** The specter particles, or null when the sequence is instant. */
+  readonly specter: SpecterPoints | null;
+  /** Seeds and buffers of the specter, allocated once; null when the sequence is instant. */
+  readonly specterSeeds: SpecterSeeds | null;
+  readonly specterBuffers: SpecterBuffers | null;
   dispose(): void;
 }
 
-/** A hooded, tattered figure on a transparent canvas. A null context leaves the texture blank. */
-function createSpecterTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = SPECTER_TEXTURE_WIDTH;
-  canvas.height = SPECTER_TEXTURE_HEIGHT;
-  const context = canvas.getContext('2d');
-  if (context) {
-    const w = SPECTER_TEXTURE_WIDTH;
-    const h = SPECTER_TEXTURE_HEIGHT;
-    context.beginPath();
-    context.moveTo(w * 0.5, h * 0.04);
-    context.bezierCurveTo(w * 0.78, h * 0.06, w * 0.8, h * 0.3, w * 0.74, h * 0.4);
-    context.bezierCurveTo(w * 0.9, h * 0.62, w * 0.98, h * 0.84, w * 0.9, h * 0.96);
-    context.lineTo(w * 0.72, h * 0.88);
-    context.lineTo(w * 0.58, h * 0.97);
-    context.lineTo(w * 0.44, h * 0.87);
-    context.lineTo(w * 0.28, h * 0.97);
-    context.lineTo(w * 0.1, h * 0.94);
-    context.bezierCurveTo(w * 0.02, h * 0.84, w * 0.1, h * 0.62, w * 0.26, h * 0.4);
-    context.bezierCurveTo(w * 0.2, h * 0.3, w * 0.22, h * 0.06, w * 0.5, h * 0.04);
-    context.closePath();
-    context.fillStyle = '#05060a';
-    context.fill();
-    context.lineWidth = 1.5;
-    context.strokeStyle = 'rgba(120,140,185,0.45)';
-    context.stroke();
-  }
-  return new THREE.CanvasTexture(canvas);
-}
-
-export function createResurrectionAssets(quality: QualityLevel): ResurrectionAssets {
+export function createResurrectionAssets(quality: QualityLevel, instant = false): ResurrectionAssets {
   const budget = RESURRECTION_BUDGET[quality];
   const embers = createEmberField(budget.embers);
-  const smoke = createSmokeField(budget.puffs);
   const glow = createGlowTexture();
-  const specterTexture = createSpecterTexture();
 
   const emberGeometry = new THREE.BufferGeometry();
   const emberPositions = new THREE.BufferAttribute(embers.positions, 3);
@@ -86,32 +56,13 @@ export function createResurrectionAssets(quality: QualityLevel): ResurrectionAss
   // The positions move every frame, so the bounding sphere of the first frame would cull them.
   emberPoints.frustumCulled = false;
 
-  const smokeMaterial = new THREE.SpriteMaterial({
-    map: glow,
-    color: SMOKE_COLOR,
-    transparent: true,
-    opacity: 0,
-    depthWrite: false,
-  });
-  const puffs: THREE.Sprite[] = [];
-  for (let i = 0; i < smoke.count; i++) {
-    const puff = new THREE.Sprite(smokeMaterial);
-    puff.visible = false;
-    puffs.push(puff);
-  }
-
-  const specterMaterial = new THREE.SpriteMaterial({
-    map: specterTexture,
-    transparent: true,
-    opacity: 0,
-    depthWrite: false,
-    fog: false,
-  });
-  const specter = new THREE.Sprite(specterMaterial);
-  specter.visible = false;
+  const specterSeeds = instant ? null : createSpecterSeeds(SPECTER_BUDGET[quality]);
+  const specterBuffers = instant ? null : createSpecterBuffers(SPECTER_BUDGET[quality]);
+  const specter = specterBuffers === null ? null : new SpecterPoints(specterBuffers, quality);
 
   const group = new THREE.Group();
-  group.add(emberPoints, ...puffs, specter);
+  group.add(emberPoints);
+  if (specter !== null) group.add(specter.points);
 
   return {
     group,
@@ -119,19 +70,15 @@ export function createResurrectionAssets(quality: QualityLevel): ResurrectionAss
     emberPoints,
     emberPositions,
     emberColors,
-    smoke,
-    puffs,
-    smokeMaterial,
     specter,
-    specterMaterial,
+    specterSeeds,
+    specterBuffers,
     dispose() {
       group.removeFromParent();
+      specter?.dispose();
       emberGeometry.dispose();
       emberMaterial.dispose();
-      smokeMaterial.dispose();
-      specterMaterial.dispose();
       glow.dispose();
-      specterTexture.dispose();
     },
   };
 }

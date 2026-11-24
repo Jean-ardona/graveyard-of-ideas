@@ -1,10 +1,15 @@
 import * as THREE from 'three';
 import type { BookHandle } from '../book/bookHandles';
 import type { QualityLevel } from '../domain/types';
+import { claimCamera, releaseCamera } from '../interaction/cameraOverride';
+import { playerSession } from '../interaction/playerSession';
 import { terrainHeight } from '../world/terrain';
 import type { TombDescriptor } from '../world/tombLogic';
 import { createBookDissolve } from './bookDissolve';
 import type { BookDissolve } from './bookDissolve';
+import { createCameraPose } from './cameraPose';
+import { writeResurrectionCamera } from './resurrectionCamera';
+import type { TombFrame } from './resurrectionCamera';
 import { createResurrectionAssets } from './resurrectionAssets';
 import type { ResurrectionAssets } from './resurrectionAssets';
 import {
@@ -15,10 +20,13 @@ import {
   tickResurrection,
 } from './resurrectionTimeline';
 import type { ResurrectionEffects, ResurrectionProgress, ResurrectionState } from './resurrectionTimeline';
-import { createSpecterPose, writeEmbers, writeSmoke, writeSpecterPose } from './resurrectionVisuals';
+import { writeEmbers } from './resurrectionVisuals';
+import { writeSpecter } from './specterParticles';
 
 export interface ResurrectionRunInput {
   scene: THREE.Object3D;
+  /** The player's camera. Its pose at the start is the pose the follow starts from and returns to. */
+  camera: THREE.Camera;
   tomb: TombDescriptor;
   /** The book of the resurrected project, still resting on its tomb. Missing only if it never rendered. */
   book: BookHandle | undefined;
@@ -35,9 +43,12 @@ export interface ResurrectionRun {
   readonly assets: ResurrectionAssets;
   /** Advances the sequence and writes every visual. Returns true once the sequence is over. Allocates nothing. */
   tick(dt: number): boolean;
-  /** Jumps to the final state (book gone, specter faded, `done` set) and writes it. Safe to call at any time. */
+  /**
+   * Jumps to the final state (book gone, `groupBTime` 9.4, `done` set), writes it (the camera back at
+   * the player's pose) and releases the camera. Safe to call at any time.
+   */
   skip(): void;
-  /** Removes and disposes every temporary object. Safe to call twice. */
+  /** Releases the camera, removes and disposes every temporary object. Safe to call twice. */
   dispose(): void;
 }
 
@@ -49,8 +60,8 @@ export function createResurrectionRun(input: ResurrectionRunInput): Resurrection
   const state = createResurrectionState();
   const progress = createResurrectionProgress();
   const effects = createResurrectionEffects();
-  const assets = createResurrectionAssets(input.quality);
-  const specterPose = createSpecterPose();
+  const assets = createResurrectionAssets(input.quality, input.instant);
+  const { specter, specterSeeds, specterBuffers } = assets;
   const originY = terrainHeight(tomb.x, tomb.z);
   assets.group.position.set(tomb.x, originY, tomb.z);
   input.scene.add(assets.group);
@@ -68,28 +79,41 @@ export function createResurrectionRun(input: ResurrectionRunInput): Resurrection
   const dissolve: BookDissolve | null = input.book === undefined ? null : createBookDissolve(input.book);
   let disposed = false;
 
+  // The player's pose, captured once and only read: the run never writes `playerSession`.
+  const { camera } = input;
+  const player = createCameraPose();
+  player.x = camera.position.x;
+  player.y = camera.position.y;
+  player.z = camera.position.z;
+  player.yaw = playerSession.yaw;
+  player.pitch = playerSession.pitch;
+  const tombFrame: TombFrame = { x: tomb.x, z: tomb.z, groundY: originY, heading: tomb.rotation };
+  const pose = createCameraPose();
+  // Reduced motion and calm mode never claim or move the camera.
+  let ownsCamera = !input.instant;
+  if (ownsCamera) claimCamera();
+
+  /** Hands the camera back to the player controller. Safe to call twice. */
+  function releaseOwnCamera(): void {
+    if (!ownsCamera) return;
+    ownsCamera = false;
+    releaseCamera();
+  }
+
   /** Copies the numbers of the current progress into the scene objects. */
   function write(): void {
     writeEmbers(assets.embers, progress);
     assets.emberPositions.needsUpdate = true;
     assets.emberColors.needsUpdate = true;
     dissolve?.apply(progress);
-
-    writeSmoke(assets.smoke, progress);
-    const { puffs } = assets.smoke;
-    assets.smokeMaterial.opacity = assets.smoke.opacity;
-    for (let i = 0; i < assets.puffs.length; i++) {
-      const puff = assets.puffs[i]!;
-      puff.visible = assets.smoke.opacity > 0;
-      puff.position.set(puffs[i * 4]!, puffs[i * 4 + 1]!, puffs[i * 4 + 2]!);
-      puff.scale.setScalar(puffs[i * 4 + 3]!);
+    if (specter !== null && specterSeeds !== null && specterBuffers !== null) {
+      specter.apply(writeSpecter(specterSeeds, progress.specterTime, tomb.rotation, specterBuffers));
     }
-
-    writeSpecterPose(progress, tomb.rotation, specterPose);
-    assets.specterMaterial.opacity = specterPose.opacity;
-    assets.specter.visible = specterPose.opacity > 0;
-    assets.specter.position.set(specterPose.x, specterPose.y, specterPose.z);
-    assets.specter.scale.set(specterPose.scale * 0.9, specterPose.scale * 1.5, 1);
+    if (ownsCamera) {
+      writeResurrectionCamera(progress.groupBTime, player, tombFrame, pose);
+      camera.position.set(pose.x, pose.y, pose.z);
+      camera.rotation.set(pose.pitch, pose.yaw, 0);
+    }
   }
 
   write();
@@ -103,14 +127,17 @@ export function createResurrectionRun(input: ResurrectionRunInput): Resurrection
       if (disposed) return true;
       tickResurrection(state, progress, effects, dt, input.instant);
       write();
+      if (effects.done) releaseOwnCamera();
       return effects.done;
     },
     skip() {
       if (disposed) return;
       finishResurrection(state, progress, effects);
       write();
+      releaseOwnCamera();
     },
     dispose() {
+      releaseOwnCamera();
       if (disposed) return;
       disposed = true;
       dissolve?.dispose();

@@ -21,8 +21,10 @@ import { openBook } from '../book/readingBook';
 import { readingMachine } from '../book/readingMachine';
 import BurialDriver from '../cinematics/BurialDriver';
 import { createBurialRun } from '../cinematics/burialRun';
+import { HOLD_DISTANCE } from '../cinematics/burialTimings';
 import { MAX_SLOTS } from '../domain/types';
 import { allocateSlot, exportData } from '../domain';
+import { isCameraClaimed } from '../interaction/cameraOverride';
 import { playerSession } from '../interaction/playerSession';
 import { clearRevealPending, isRevealPending, resetRevealPending } from '../interaction/revealPending';
 import { createRitualMachine, ritualMachine } from '../interaction/ritualMachine';
@@ -166,16 +168,23 @@ describe('closing checklist', () => {
     expect(project?.slot).toBe(expected);
     expect(toTombDescriptor(project!)?.slot).toBe(expected);
 
-    // The cinematic turns toward the slot of the saved project, whatever the preview said.
+    // The cinematic holds in front of the slot of the saved project, whatever the preview said, and
+    // the camera ends where the player stands.
     playerSession.yaw = 0;
     playerSession.pitch = 0;
     const camera = new THREE.PerspectiveCamera();
     camera.rotation.order = 'YXZ';
-    const run = createBurialRun({ scene: new THREE.Scene(), camera, projectId: project!.id, slot: project!.slot!, instant: true });
+    const run = createBurialRun({ scene: new THREE.Scene(), camera, projectId: project!.id, slot: project!.slot!, instant: false });
     const place = GRAVE_SLOTS[project!.slot!]!;
-    const toTomb = new THREE.Vector3(place.x - playerSession.x, 0, place.z - playerSession.z).normalize();
-    const forward = new THREE.Vector3(0, 0, -1).applyEuler(camera.rotation).setY(0).normalize();
-    expect(forward.dot(toTomb)).toBeGreaterThan(0.98);
+    const hold = new THREE.Vector3(run.hold.x, run.hold.y, run.hold.z);
+    expect(Math.hypot(hold.x - place.x, hold.z - place.z)).toBeLessThan(HOLD_DISTANCE + 1);
+    const toTomb = new THREE.Vector3(place.x - hold.x, 0, place.z - hold.z).normalize();
+    const forward = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(0, run.hold.yaw, 0, 'YXZ'));
+    expect(forward.dot(toTomb)).toBeGreaterThan(0.95);
+    run.skip();
+    expect(camera.position.toArray()).toEqual([0, 0, 0]);
+    expect(camera.rotation.y).toBe(0);
+    expect(isCameraClaimed()).toBe(false);
     run.dispose();
     playerSession.yaw = 0;
     playerSession.pitch = 0;

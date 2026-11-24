@@ -1,0 +1,21 @@
+{
+  "enabled": true,
+  "name": "Low Quality Render Reminder",
+  "description": "On save of files under src/book, src/cinematics or src/world, reminds you to check the render at Low quality.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "src/book/**/*.ts",
+      "src/book/**/*.tsx",
+      "src/cinematics/**/*.ts",
+      "src/cinematics/**/*.tsx",
+      "src/world/**/*.ts",
+      "src/world/**/*.tsx"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A file under src/book, src/cinematics or src/world was just saved. Reply with exactly one short sentence reminding the user to check the render at Low quality (the default preset) on the target machine. Do not edit any file and do not run any command."
+  }
+}

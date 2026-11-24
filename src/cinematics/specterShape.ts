@@ -3,8 +3,8 @@ import { SPECTER_MAX_PARTICLES } from './specterTimings';
 
 /**
  * The target points of the hooded silhouette. Pure: no React, Three.js, DOM, store or timers, and
- * no random source. Point `i` depends on `i` alone (Halton sequence), so a shape of 400 points is
- * the first 400 points of a shape of 800.
+ * no random source. Point `i` depends on `i` alone (Halton sequence), so a shape of k points is
+ * the first k points of any larger shape.
  * Frame: x lateral, y up with 0 at the hem, z toward the front of the figure.
  */
 
@@ -25,7 +25,7 @@ const FACE_Y = 2.12;
 const FACE_HALF_WIDTH = 0.12;
 const FACE_HALF_HEIGHT = 0.16;
 
-/** `n` truncated to an integer in [0, 800]. NaN and negative numbers give 0; +Infinity gives 800. */
+/** `n` truncated to an integer in [0, SPECTER_MAX_PARTICLES]. NaN and negative numbers give 0; +Infinity gives the cap. */
 export function silhouetteCount(n: number): number {
   const whole = Math.trunc(n);
   if (!(whole > 0)) return 0;

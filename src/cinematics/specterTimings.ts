@@ -23,10 +23,10 @@ export const GROUP_B_TOTAL = SPECTER_TOTAL + RETURN_SECONDS;
 
 /** Particles per quality preset; Low is the default. */
 export const SPECTER_BUDGET: Readonly<Record<QualityLevel, number>> = {
-  low: 400,
-  medium: 600,
-  high: 800,
+  low: 1200,
+  medium: 1800,
+  high: 2500,
 };
 
 /** No buffer ever holds more particles than this. */
-export const SPECTER_MAX_PARTICLES = 800;
+export const SPECTER_MAX_PARTICLES = 2500;

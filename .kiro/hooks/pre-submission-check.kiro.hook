@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Pre-submission check",
+  "description": "Manual checklist to run before submitting: dev keys, asset licenses, build, tests, demo video, README and write-up.",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Present this pre-submission checklist to the user as a list, and do not edit any file. Items: 1) Remove dev keys F2 and F3 (search src for their handlers and report where they are, or confirm none remain). 2) Every asset listed in docs/ASSETS.md has a license recorded (read the file and flag any entry without one). 3) The build passes (npm run build). 4) The tests pass (npx vitest --run). 5) The demo video is under 3 minutes, public on YouTube, with no copyrighted music. 6) README and the write-up explaining how Kiro was used are done. For items 1 and 2, inspect the repo and report the result. For items 3 and 4, run the commands and report pass or fail. For items 5 and 6, list them as manual checks for the user to confirm."
+  }
+}

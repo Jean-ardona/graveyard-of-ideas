@@ -6,11 +6,18 @@
 /** Seconds the camera takes to turn from the player's look to the specter. */
 export const FOLLOW_IN_SECONDS = 2.0;
 
-/** Seconds the aim point lags behind the specter, so the look is smoothed without stored state. */
-export const LOOK_LAG = 0.35;
+/**
+ * Seconds the aim point lags behind the specter, so the look is smoothed without stored state.
+ * Kept short: from the reading spot (about 1.5 m from the tomb) a longer lag lets the departing
+ * figure leave `FRAME_CONE`.
+ */
+export const LOOK_LAG = 0.1;
 
-/** Meters the aim point sits below the specter center, so the figure rides above the screen center. */
-export const FRAME_DROP = 0.8;
+/**
+ * Meters the aim point sits below the specter center, so the figure rides above the screen center.
+ * Kept small for the same reason: a fixed drop is a large angle at close range.
+ */
+export const FRAME_DROP = 0.3;
 
 /** Radians (about 26 degrees): the specter stays inside this angle around the view direction. */
 export const FRAME_CONE = 0.45;

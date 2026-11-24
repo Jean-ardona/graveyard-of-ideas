@@ -18,9 +18,10 @@ const color = {
   fieldFill: '#dde3ee',
   fieldBorder: '#5a6a84',
   buttonBorder: '#3b4d73',
-  /** Specter particle body (near-black) and rim (pale blue). Never used as text. */
+  /** Specter particle body (near-black). Never used as text. */
   specterBody: '#07070b',
-  specterRim: '#9fb4e0',
+  /** Pale blue-white of the burial reveal glow and the book tint. Never amber, never used as text. */
+  revealGlow: '#e4eeff',
 } as const;
 
 export const TOKENS = {

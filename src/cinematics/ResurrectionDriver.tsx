@@ -17,12 +17,14 @@ import { attachResurrectionSkip } from './resurrectionSkip';
 /**
  * Plays the resurrection in the 3D scene. It starts when the session reports that the project is
  * saved as Resurrected, ticks the timeline in `useFrame`, and at the end disposes every temporary
- * object and releases the held tomb (which removes the tomb, its book and its collider). Nothing here
+ * object and releases the held tomb (which removes the tomb, its book and its collider). The run
+ * claims the camera while it plays and releases it at the end, on skip and on unmount. Nothing here
  * writes project data: the save came first. Escape, Enter, Space or a lost pointer lock skips to the
  * final state with the same cleanup. A reload never replays: the held tomb is not persisted.
  */
 export default function ResurrectionDriver() {
   const scene = useThree((state) => state.scene);
+  const camera = useThree((state) => state.camera);
   const runRef = useRef<ResurrectionRun | null>(null);
   const detachSkipRef = useRef<(() => void) | null>(null);
 
@@ -48,6 +50,7 @@ export default function ResurrectionDriver() {
       if (runRef.current !== null || !isResurrectionRunning() || tomb === undefined) return;
       runRef.current = createResurrectionRun({
         scene,
+        camera,
         tomb,
         book: getBookHandle(tomb.id),
         quality: appStore.getState().data.prefs.quality,
@@ -61,7 +64,7 @@ export default function ResurrectionDriver() {
       unsubscribe();
       if (runRef.current !== null) finishRun();
     };
-  }, [scene, finishRun, skipRun]);
+  }, [scene, camera, finishRun, skipRun]);
 
   useFrame((_, delta) => {
     const run = runRef.current;
