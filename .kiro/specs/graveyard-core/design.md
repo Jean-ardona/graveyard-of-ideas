@@ -65,7 +65,7 @@ Each sequence is a list of timed steps with a final-state function. Burial: the 
 ## Burial ritual (replaces task 6.1b, merges task 6.2)
 
 ### Decision and scope
-The grimoire as a big book or list panel is dropped. A project is created by a short guided ritual with a quill. The lectern from 6.1a stays; its grimoire panel, its project list by status and the guide-to-tomb transition are removed, because the tombs already show the resting projects. Resurrected and accomplished projects lose their list; where they are shown is open item R1 below.
+The grimoire as a big book or list panel is dropped. A project is created by a short guided ritual with a quill. The lectern from 6.1a stays; its grimoire panel, its project list by status and the guide-to-tomb transition are removed, because the tombs already show the resting projects. Resurrected and accomplished projects lose their list; where they are shown is decided by open item R1 below (the book of the risen).
 
 Flow:
 1. A quill rests on the lectern. Prompt (copy module): "E - Write a new project". Refused with the calm `graveyard_full` message when `allocateSlot` returns null; nothing starts then.
@@ -110,7 +110,7 @@ src/cinematics/BurialDriver.tsx  R3F. ticks the timeline in useFrame, writes the
 
 `commitBurial` is a store action (task 6.1b.5): the single real save. Task 6.2.2 adds only the cinematic and the reveal-pending flag; it never writes project data.
 
-Removed with the old panel: `src/grimoire/GrimoirePanel.tsx`, `ProjectList.tsx`, `grimoireGroups.ts` and the panel flag in `src/interaction/grimoireMode.ts`, plus `openGrimoire`/`closeGrimoire` in `grimoireSession.ts` and the `canOpenGrimoire` guard. `ProjectDetail.tsx` and the rest of `src/grimoire` are kept untouched until open item R1 is decided. The exact removal list belongs to the task description.
+Removed with the old panel: `src/grimoire/GrimoirePanel.tsx`, `ProjectList.tsx`, `grimoireGroups.ts` and the panel flag in `src/interaction/grimoireMode.ts`, plus `openGrimoire`/`closeGrimoire` in `grimoireSession.ts` and the `canOpenGrimoire` guard. `ProjectDetail.tsx` and the rest of `src/grimoire` are kept untouched here; `ProjectDetail.tsx` is reused by task 8.1 (open item R1 is decided). The exact removal list belongs to the task description.
 
 ### Step machine (`ritualMachine.ts`)
 ```ts
@@ -495,11 +495,151 @@ Assumptions made, none blocking:
 - PBT does not apply to: the look of ink-in, the quill graphic, the pale light, Pointer Lock browser behavior, the camera feel.
 
 ### Open items (not decided here)
-- **R1. Where resurrected projects are shown.** With the list panel gone, resurrected and accomplished projects have no place to be read and edited (`goal`, `epitaph`, `notes`, new plan, mark action done, set a new action, "Let it rest again", "Honor this project", delete; Requirements 6.1 to 6.4). One idea: the tomb disappears and the book rests on the lectern or on a shelf in the hut, opened with E. To be decided after task 7; task 8.1 depends on it. Until then the old `src/grimoire/ProjectDetail.tsx` is not deleted.
+- **R1. Decided.** Resurrected and accomplished projects are shown in a small "book of the risen" on a stand in the keeper's hut next to the lectern, opened with E (cover first, then summoned pages). See "Book of the risen (task 8.1)" below. The proposed wording of Requirements 3.3, 6.1 to 6.4 and 8.3 is listed there under "Requirements wording notes" (open item R5); `requirements.md` is not edited.
 - **R2. Decided.** The ritual saves first (`commitBurial` when the last step is validated or "Seal the tomb" is used) and the cinematic represents saved state, so Requirements 3.x, 4.x and 9.2 stay true and need no edits.
 - **R3. Decided.** The tomb keeps its slab and the book rests on it.
 - **Requirements 2.1, 2.3 and 2.5** are rewritten later in task 5.3.9 to match the book flow (no slab opening); this design does not depend on that rewrite.
 - **R4. Structure.** The ritual uses existing folders only (`domain`, `interaction`, `cinematics`, `ui`, `world`).
+
+## Book of the risen (task 8.1, decides open item R1)
+
+*Properties 96 to 101. Playbook P105 to P110 (design property N is playbook P(N+9)); check the playbook for the next free numbers when writing them.*
+
+### Decision and scope
+Resurrected and accomplished projects live in one small "book of the risen" on a stand in the keeper's hut, next to the quill lectern on the porch. Resting projects are never listed there (their tombs show them). The book is a small closed book with a faint cool glow (emissive only: no new light, no amber). Pressing E opens its cover in about 0.8 s (a hinged front board like the tomb book model, not the reading machine). When the cover is open, the pages of the list are summoned above it with `SummonedPage` (task 13.8). Closing dissolves the pages first, then the cover closes. With reduced animations or calm mode every step is instant. The UI mode, `inputLocked` and pointer rules are the quill ritual's, and OPEN is refused while any other mode runs.
+
+Open item R1 is decided by this section. The earlier idea (the tomb disappears and the book rests on the lectern or a shelf) is dropped: the tomb of a resurrected project is already removed by 7.2, and the old list panel stays removed.
+
+### Modules
+```
+src/grimoire/risenGroups.ts        PURE. risenSections(projects) -> { resurrected, accomplished } (the only place that filters by status for the book)
+src/grimoire/risenGuards.ts        PURE. canHonor, canRestAgain, canDelete, restAgainNotice (guards that mirror the domain rules)
+src/interaction/risenMachine.ts    PURE state machine (phases and views), state mutated in place, subscribe, selectors uiMode / inputLocked / pointerReleased, routeRisenKey
+src/interaction/risenSession.ts    glue: guarded open, close, pointer release and request, handlers that call the store, reveal hand-off
+src/cinematics/risenCover.ts       PURE. cover timeline (0.8 s, in place, instant) and coverAngle
+src/world/risenStandLogic.ts       id, position beside the lectern, collider, registerRisenStand (like lecternLogic.ts)
+src/world/risenStandAssets.ts      shared geometry and material of the stand, the glow materials of the book; disposed on unmount
+src/world/RisenStand.tsx           stand plus closed book, the cover driver (useFrame only while the cover moves)
+src/grimoire/RisenBook.tsx         the page host: SummonedPage with RisenList, ProjectDetail (adapted), RisenConfirm
+src/grimoire/RisenList.tsx, RisenActions.tsx, RisenConfirm.tsx
+```
+`src/domain` is not changed. `uiMode.ts` gains the mode `risen` and `uiModeForRisenPhase`. `ritualMachine.ts` gains one event, `REVEAL` (see "Rest again").
+
+### Stand and book
+- Position: beside the lectern on the porch, `RISEN_STAND_OFFSET` is `LECTERN_OFFSET` shifted 1.0 m along the porch (the same place rule as the lectern: on the porch, off the door path). A test checks that its collider does not overlap the lectern collider and that the door path stays free.
+- Stand: one procedural mesh (a short post and a tilted top, shared geometry and material, no light, no `castShadow`), a small box collider, one interactable with `COPY.risen.prompt` (the keeper's voice, reach about 2.0 m). The prompt is hidden while `inputLocked`.
+- Book: the existing `createBookModel` with the shared `BookAssets`, scaled small (`RISEN_BOOK_SCALE`, tuned at the milestone) and laid on the tilted top. It is not registered in the book handle registry, owns no leaf textures, no curl geometry and no overlay, and never enters the reading machine. Only `parts.cover.rotation.y` moves, from 0 to `-COVER_OPEN_ANGLE * coverAngle` (same sign and axis as the tomb book). Look: two materials created for it (tinted copies of the cover and page block materials) with `emissive = TOKENS.color.revealGlow` and a low fixed `emissiveIntensity` (about 0.15), disposed on unmount; the hue is outside the amber range (shared `isAmberHue` test). No pulse, so a closed book costs no per-frame work.
+- Per-frame rule: the `useFrame` callback does nothing while the phase is `closed`, `open` or `dissolving` (the pages move in the DOM, not here) and writes the one rotation only in `opening` and `covering`, with no allocation.
+
+### Cover timeline (`risenCover.ts`, PURE)
+`RISEN_COVER = { seconds: 0.8 }`. State `{ t }` (raw fraction in [0, 1], created once, mutated in place). `tickRisenCover(state, direction, dt, instant)` moves `t` toward 1 (`'open'`) or toward 0 (`'close'`) at `1 / seconds` per second, with `dt` clamped to `MAX_FRAME_DELTA` (NaN, negative and infinite `dt` count as 0); `instant` jumps to the target in one call. `coverAngle(state) = smoothstep(t)` (the `smoothstep` of `cameraPose.ts`) and `pagesAllowed(state)` is `t === 1`. Because `t` is a function of time on one path, a reversal retraces the opening and never jumps.
+
+### Phases and views (`risenMachine.ts`, PURE)
+State `{ phase, view, section, selectedId, revealId, error, deleting }` created once and mutated in place; no timers; `subscribe` for discrete changes.
+
+Phases: `closed`, `opening` (cover moving), `open` (pages on screen), `dissolving` (pages leaving), `covering` (cover closing). Views: `list`, `detail`, `confirm` (meaningful from `opening` on). Sections: `resurrected` (the default on each OPEN) and `accomplished`.
+
+| Event | From | To |
+|---|---|---|
+| OPEN | closed | opening, view list, section resurrected, selectedId null |
+| COVER_OPENED | opening | open |
+| SET_SECTION(s) | open, view list | same view, section s |
+| SELECT(id) | open, view list, id non-empty | view detail, selectedId id |
+| BACK | open, view detail | view list, selectedId null |
+| ASK_DELETE | open, view detail | view confirm |
+| CANCEL_DELETE | open, view confirm | view detail |
+| CONFIRM_DELETE | open, view confirm, not deleting | deleting true, effect `delete(selectedId)` |
+| DELETE_OK | open, deleting | view list, selectedId null, deleting false |
+| DELETE_FAILED(code) | open, deleting | view detail, deleting false, error code |
+| REST_SAVED(id) | open, view detail, selectedId equals id | dissolving, revealId id |
+| CLOSE | open | dissolving |
+| CLOSE | opening | covering |
+| PAGES_GONE | dissolving | covering |
+| COVER_CLOSED | covering | closed (reset: view list, selectedId null, deleting false, error null) |
+| SKIP | opening | open (view list) |
+| SKIP | dissolving, covering | closed (the same reset) |
+
+Every other pair is ignored (the machine returns `'ignored'` and nothing changes). `routeRisenKey(key, phase, view, landed)` maps keys to events: before the page has landed any of Escape, Enter or Space is LAND (as in 13.8); after landing Escape is CANCEL_DELETE in `confirm`, BACK in `detail`, CLOSE in `list` and in `opening`, and SKIP in `dissolving` and `covering`; no key ever produces CONFIRM_DELETE (only the confirm button's own click does). Selectors: `uiMode()` is `risen` when the phase is not `closed`; `inputLocked()` is true in the same cases; `pointerReleased()` is true in `opening` and `open` only (the pointer is requested again as soon as CLOSE is accepted, like a ritual cancel; walking returns at `closed`).
+
+Invariants: R1 phase `closed` implies view `list`, `selectedId` null, `deleting` false and `error` null; R2 view `detail` or `confirm` implies `selectedId` non-null; R3 view `list` implies `selectedId` null; R4 `deleting` implies view `confirm`; R5 `revealId` is non-null only in `dissolving` and `covering`, and `takeReveal()` hands it out exactly once.
+
+### Pages
+All pages are `SummonedPage` content (real DOM, kit components, strings from `COPY.risen`). The first page after the cover opens uses the full summon, a change of view uses the short swap, and closing uses the full dismiss. With `instant` motion nothing animates.
+- **List page.** Title, a ribbon (kit `Choice` styled as two ribbon tabs, role `tablist`) with "Resurrected" and "Accomplished" and their counts, and the rows of the active section from `risenSections` (title and date, stable order). A row selects the project. An empty section shows a calm line in the keeper's voice from `COPY.risen`, never guilting, with a gentle next step such as visiting a tomb.
+- **Detail page.** `ProjectDetail.tsx` is kept and extended. It shows the title and the status line (read-only) and these fields, editable with the existing `FieldEditor` from `src/book` (autosave through `editProject`, inline error through `errorMessage`, the last saved value kept on any error): the idea (`description`; an empty value keeps the last saved text), next action, smaller version (`reducedVersion`), goal, epitaph and notes. The final result and its link are shown when present. Actions (`RisenActions.tsx`): **Honor** (only on a resurrected project; two optional fields, a final result and a link, passed as `HonorInput`), **Let it rest** (only on a resurrected project and only when a slab is free; an optional new reason, saved on `abandonReason`, proposed and never required) and **Delete** (leads to the confirmation page and never deletes by itself). When the graveyard is full, Let it rest is replaced by a calm line (`restAgainNotice`), and a stale click returns `graveyard_full` from the store with the same line.
+- **Confirmation page.** Its own page (`RisenConfirm.tsx`): the title of the project, gentle copy (the project leaves the book for good and nothing else is touched), "Keep it" (default focus, returns to the detail page) and "Delete". Enter on the page activates the focused "Keep it". "Delete" is a separate button with no default key.
+
+### Actions (save first)
+Every action calls an existing store action and the view changes only after the result is known; the store flushes persistence before returning.
+- **Honor:** `honor(id, input)` (domain rule: only resurrected). The project becomes accomplished and leaves the resurrected section. The detail page stays, with the new status, and no world object is created.
+- **Let it rest:** guard `canRestAgain(project, projects)` (resurrected and `allocateSlot` not null). Order: validate the optional reason against the field limit, call `restAgain(id)` (identity, notes and history kept), then `editProject(id, { abandonReason })` when a reason was typed, then `markRevealPending(id)`, then `REST_SAVED(id)`. A failure at any step leaves the earlier saved state valid and shows the calm line. When no slab is free nothing is called and nothing changes.
+- **Delete:** only from `confirm`, through CONFIRM_DELETE and the store `remove(id)`; the result goes back to the machine as DELETE_OK or DELETE_FAILED. A second click while `deleting` is ignored.
+- **Edits:** `editProject` per field, with no change to domain rules.
+
+### Rest again: reuse of the burial camera and reveal glow (13.6)
+After REST_SAVED the pages dissolve and the cover closes (the same close as above, instant when reduced). In the same step that receives COVER_CLOSED, the session takes the `revealId` and sends `REVEAL(id)` to the ritual machine, so no input frame lies between the two modes. `REVEAL` is accepted only in `idle`: it sets phase `cinematic`, `committed` true and `projectId` exactly as `COMMIT_OK` does and nothing else, so the existing `BurialDriver` starts on its own start condition. The camera dollies to 3 m in front of the new tomb, the tomb's own book is revealed with the pale blue-white `revealGlow`, the camera returns to the player and DONE ends it. The pending flag is set at the save, so the book on the tomb stays hidden from the save until the reveal; the tomb itself appears at once at the save. Skip (Escape, Enter, Space or a lost lock) lands on the final state like any burial. A reload at any point shows the tomb with its book and no flag, and nothing replays. If REVEAL is refused or the project no longer rests, the session clears the flag. The "short burial variant" of Requirement 6.2 is therefore the ritual's own reveal, not a separate cinematic.
+
+### Pointer, input and comfort
+OPEN guard `canOpenRisen({ mode, pointerAllowsMovement })`: mode `exploring` and the pointer allows movement. Every other major mode (`reading`, `openingGrave`, `closingGrave`, `burying`, `resurrecting`, `entrance`, `paused`) is not `exploring`, so OPEN is refused while any of them runs; `canOpenBook`, `canStartRitual` and `canStartResurrection` already refuse while the mode is `risen`. On OPEN accepted: `inputLocked` true and `releasePointer()`. On CLOSE accepted: `requestPointer()` (a refusal falls to "Click to resume"); walking returns at `closed`. A lost pointer lock while `opening` dispatches CLOSE. `instant` is `prefs.reducedMotion || calmMode`: the cover lands at once and the pages are landed from their first frame. Nothing about the phase, view, section or selection is persisted; a reload starts `closed`.
+
+### Correctness Properties (book of the risen)
+
+*Each property below is a formal statement checked by a fast-check test.*
+
+#### Property 96: Every project is in exactly one section
+For any list of projects, `risenSections` puts every resurrected project in `resurrected` and every accomplished project in `accomplished`, each exactly once; no resting project appears in either; the order inside a section is the input order; and the two counts add up to the number of non-resting projects.
+
+**Validates: Requirements 3.3, 6.1**
+
+#### Property 97: The view machine stays consistent
+For any sequence of events (including events in the wrong phase, SELECT with an empty id, repeated CONFIRM_DELETE, REST_SAVED with another id, and SKIP at any point), invariants R1 to R5 hold after every event; view events are accepted only in `open`; `uiMode()` is `risen` exactly when the phase is not `closed`; `pointerReleased()` is true only in `opening` and `open`; an ignored event leaves the state unchanged; and, once landed, Escape through `routeRisenKey` steps back one level at a time (confirm, detail, list, closing).
+
+**Validates: Requirements 6.1, 9.1**
+
+#### Property 98: Delete never happens without a confirmation
+For any sequence of events, the `delete` effect is produced only by CONFIRM_DELETE in view `confirm` with `deleting` false, at most once per entry into `confirm`, and never by any other event or by `routeRisenKey` for any key (Enter, Space and Escape included); after CANCEL_DELETE, BACK, CLOSE or SKIP no delete is pending.
+
+**Validates: Requirements 6.4**
+
+#### Property 99: Action guards agree with the domain
+For any list of projects and any project in it: `canHonor` is true exactly when `honor` succeeds with an empty input; `canRestAgain` is true exactly when `restAgain` succeeds (status resurrected and a free slot); when the graveyard is full `canRestAgain` is false and `restAgainNotice` is the calm message for `graveyard_full`; `canDelete` is true for any existing project; and calling a store action whose guard is false leaves the projects list reference-identical.
+
+**Validates: Requirements 6.2, 6.3, 6.4**
+
+#### Property 100: The UI state is never persisted
+For any sequence of machine events, the persisted `AppData` (the exported JSON) is identical before and after, no phase, view, section, selection or reveal field appears in the store or in the export, and a fresh module state (a simulated reload) is `closed` with no selection, no `revealId` and no reveal-pending flag.
+
+**Validates: Requirements 7.1, 9.2**
+
+#### Property 101: The cover sequence is bounded, ordered and instant when reduced
+For any sequence of `tickRisenCover` calls with any direction changes and any `dt` (zero, NaN, negative, infinite, above the clamp), `t` stays in [0, 1], moves by at most `MAX_FRAME_DELTA / seconds` per call, the same total time split differently below the clamp gives the same `t`, a reversal retraces the same values (no jump), `pagesAllowed` is true only at `t = 1`, and with `instant` one call reaches the target exactly.
+
+**Validates: Requirements 8.3, 9.1, 9.2**
+
+### Testing strategy (book of the risen)
+- Library: fast-check with Vitest, at least 100 runs each, tagged `Feature: graveyard-core, Property N: <title>` for N = 96 to 101. Files: `risenGroups.test.ts` (96), `risenMachine.test.ts` (97, 98, 100), `risenGuards.test.ts` (99), `risenCover.test.ts` (101), `risenSession.test.ts` and the component tests (examples).
+- Generators: project lists with random statuses, slots (including a full graveyard) and unicode titles; event sequences over the whole event set with random ids and section names; a fake store (array held by reference, with a flush counter) for save-first checks; `dt` from `fc.double` with NaN and infinities.
+- Source scans: `risenGroups`, `risenGuards`, `risenMachine` and `risenCover` import no React, Three.js, DOM, store or timers and never call `Math.random`; the `useFrame` callback of `RisenStand` has no `new `, array or object literals; no `PointLight`, `SpotLight` or `castShadow` is added; the copy coverage, tone and skin scans pass for the new files; no raw form controls outside `src/ui/kit`.
+- Example tests: the stand shares geometry and material, adds no light, and disposal is counted on unmount (stand and glow materials); the book is not in the handle registry; the prompt is `COPY.risen.prompt`; OPEN is refused in each other mode; with a fake adapter the flush happens before the view changes for honor, rest again and delete; rest again with a full graveyard changes nothing and shows the calm line; a rest again sends `REVEAL` once, after `closed`, and the tomb's book stays hidden until the reveal ends; delete is never reachable by Enter alone; an emptied description keeps the last saved text with the inline error; reduced motion and calm mode land everything at once.
+- Manual on the target machine at Low: the cover opens calmly and the glow reads against the night with no warm tint; the page summon above the book; the frame rate with the book open; the dolly after a rest again from the porch.
+- PBT does not apply to: the look of the stand and the glow, the feel of the cover, the DOM focus order.
+
+### Notes and assumptions (book of the risen)
+1. **Page position.** The summoned page appears in the same centered place as the ritual pages, not anchored to the 3D book. "Above it" is carried by the glow and the motes. Anchoring the page to the projected book position is a polish item.
+2. **Camera.** The camera does not move for the book. The player stands within prompt reach of the stand; if they face away, the pages still appear.
+3. **Idea field.** The detail page also edits the idea (`description`), so the rule "an empty description keeps the last saved value" has a place to apply. The title is read-only because `editProject` has no title field.
+4. **Mark the action done.** The domain has no "done" flag. The user does this by replacing the next action text (see the wording notes below).
+5. **Honor stays on the detail page** after the move to accomplished so the user sees the result; going back shows the project in the accomplished section.
+6. **Playbook.** Properties 96 to 101 are written to the playbook by the sessions that add them (P105 to P109 in 8.1a, P110 in 8.1b), not by 13.9.
+
+### Requirements wording notes (open item R5; `requirements.md` is not edited here)
+Proposed wording for the user's review:
+- 3.3: THE SYSTEM SHALL let the user write new projects at the lectern, and SHALL list resurrected and accomplished projects in the book of the risen on its stand in the keeper's hut.
+- 6.1: WHEN a project is Resurrected THE SYSTEM SHALL let the user read it in the book of the risen, edit the new plan and its next action, add notes and links, and replace the next action when it is done. (The domain has no "action done" flag; "mark the action done" is expressed by replacing the next action.)
+- 6.2: WHEN the user chooses "Let it rest" in the book of the risen and a grave slot is free THE SYSTEM SHALL save status Resting with a free slot, keep identity and notes, and play the burial reveal of the new tomb. A new reason may be proposed but not imposed. IF no slot is free THEN THE SYSTEM SHALL change nothing and say so calmly.
+- 6.3: WHEN the user chooses "Honor" on a Resurrected project in the book of the risen THE SYSTEM SHALL set status Accomplished, allow a final result and link, and create no monument.
+- 6.4: WHEN the user deletes a project from the book of the risen THE SYSTEM SHALL show a separate confirmation page first, treating deletion as separate from burial, resurrection or any visual disappearance.
+- 8.3: THE SYSTEM SHALL provide reduced animations and a menu with: resume, quality, reduced animations, calm mode, export/import, controls, hear the guide again. There is no "grimoire" entry; the plain mode of 9.2 gives access to all projects without 3D.
 
 ## Book (src/book)
 3D cover, spine, page block and parchment pages. Editable content is embedded HTML on the page planes; the book is not made of 3D letters. Four parts: Ambition, Abandonment, Remains, Second chance.
@@ -681,7 +821,7 @@ Allocation: three leaf meshes share one geometry and one material; the driver wr
 | 2 | "Why it rests" (editable), "The idea in one line" (editable) | `abandonReason`, `description` |
 | 3 | "Realistic next action" (editable), "A smaller version (optional)" (editable, optional), resurrection button | `nextAction`, `reducedVersion` |
 
-`goal`, `epitaph` and `notes` have no page; they are written during the burial ritual and their later editing for resurrected projects belongs to task 8.1, whose location is an open item (see "Burial ritual", open item R1).
+`goal`, `epitaph` and `notes` have no page; they are written during the burial ritual and their later editing for resurrected projects belongs to task 8.1, in the book of the risen (see "Book of the risen").
 
 The resurrection button is rendered disabled until task 7 passes an `onResurrect` handler; the rule "next action required" belongs to task 7.1. Edits keep using `editProject` through `FieldEditor` (autosave, unchanged).
 
@@ -1013,7 +1153,7 @@ For any close event from `END_INDEX`, the sequence of phase, `t`, swing and cove
 
 ### Open points
 1. Requirements 2.1, 2.3 and 2.5 still describe the slab flow and the four content parts. Their wording is left to task 5.3.9, where the user reviews it.
-2. Decided: page 3 holds `reducedVersion` next to the next action and the resurrection button (Req 5.1). `goal`, `epitaph` and `notes` have no book page (task 8.1 and its location: see open item R1 in "Burial ritual").
+2. Decided: page 3 holds `reducedVersion` next to the next action and the resurrection button (Req 5.1). `goal`, `epitaph` and `notes` have no book page (task 8.1, in the book of the risen).
 3. "The idea in one line" is bound to `description`. Change `bookPageLayout.ts` if another field is intended.
 4. Final font choice among the three candidates (default: IM Fell English).
 
