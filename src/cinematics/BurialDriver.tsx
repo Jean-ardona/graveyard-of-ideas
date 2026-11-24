@@ -59,7 +59,7 @@ export default function BurialDriver() {
       let previous = getPointerMode();
       const onKeyDown = (event: KeyboardEvent): void => {
         if (event.repeat || isTypingTarget(event.target)) return;
-        const action = routeRitualKey(event.key, event.shiftKey, event.ctrlKey || event.metaKey, ritualMachine.phase());
+        const action = routeRitualKey(event.key, event.shiftKey, event.ctrlKey || event.metaKey, ritualMachine.phase(), true);
         if (action === 'SKIP_CINEMATIC') skip();
       };
       const unsubscribe = subscribePointerMode(() => {

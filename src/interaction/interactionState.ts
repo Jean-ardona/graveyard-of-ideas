@@ -45,9 +45,12 @@ function subscribeFocused(listener: () => void): () => void {
   };
 }
 
-/** Runs the handler of the focused interactable, if any. */
-export function activateFocused(): void {
-  if (focused) handlers.get(focused.action)?.();
+/** Runs the handler of the focused interactable, if any. Returns true when a handler ran. */
+export function activateFocused(): boolean {
+  const handler = focused ? handlers.get(focused.action) : undefined;
+  if (!handler) return false;
+  handler();
+  return true;
 }
 
 /** Currently focused interactable for UI components. */

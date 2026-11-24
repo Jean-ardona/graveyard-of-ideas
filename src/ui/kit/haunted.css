@@ -435,7 +435,7 @@ textarea {
   stroke-width: 1.5;
 }
 
-/* The ritual page: one parchment sheet in front of the player. Pages swap by opacity only. */
+/* The ritual page: one parchment sheet in front of the player. Pages are summoned and dissolved by the page summon below. */
 
 .ritual-layer {
   position: fixed;
@@ -489,30 +489,49 @@ textarea {
   justify-content: space-between;
 }
 
-.ritual-sheet[data-phase='in'] {
-  animation: ritual-in 180ms ease-out;
+/* The page summon: a perspective stage, a page that rises about its bottom edge, and one mote canvas. */
+.summon-stage {
+  position: relative;
+  perspective: 900px;
 }
-
-.ritual-sheet[data-phase='out'] {
+.summon-page {
+  position: relative;
+  transform-origin: 50% 100%;
+}
+/* A faint mist glow along the edges while the page rises; it fades out once the page has landed. */
+.summon-page::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-medium);
+  box-shadow: 0 0 22px 3px var(--color-mist);
   opacity: 0;
-  transition: opacity 180ms ease-in;
   pointer-events: none;
+  transition: opacity 700ms ease-out;
 }
-
-.ritual-page[data-still='true'] .ritual-sheet {
-  animation: none;
+.summon-page[data-landed='false']:not([inert])::after {
+  opacity: 0.32;
   transition: none;
 }
-
-@keyframes ritual-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+.summon-retiring {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
-
+.summon-retiring > .summon-page {
+  position: absolute;
+  inset: 0;
+}
+.summon-page[data-landed='false'] *,
+.summon-retiring * {
+  pointer-events: none;
+}
+.summon-layer {
+  position: fixed;
+  display: none;
+  pointer-events: none;
+  z-index: 230;
+}
 /* The resurrection question over the open book. */
 
 .resurrect-layer {

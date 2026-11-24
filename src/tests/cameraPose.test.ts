@@ -83,11 +83,16 @@ describe('pose helpers', () => {
       fc.property(anyNumber, (angle) => {
         const wrapped = wrapPi(angle);
         expect(Number.isFinite(wrapped)).toBe(true);
-        expect(Math.abs(wrapped)).toBeLessThanOrEqual(Math.PI);
+        // The range is (-PI, PI]: -PI itself is never returned.
+        expect(wrapped).toBeGreaterThan(-Math.PI);
+        expect(wrapped).toBeLessThanOrEqual(Math.PI);
       }),
       { numRuns: 200 },
     );
-    expect(wrapPi(3 * Math.PI)).toBeCloseTo(-Math.PI, 9);
+    expect(wrapPi(3 * Math.PI)).toBe(Math.PI);
+    expect(wrapPi(Math.PI)).toBe(Math.PI);
+    expect(wrapPi(-Math.PI)).toBe(Math.PI);
+    expect(wrapPi(-3 * Math.PI)).toBe(Math.PI);
     expect(wrapPi(0.5)).toBe(0.5);
   });
 });

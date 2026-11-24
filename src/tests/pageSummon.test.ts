@@ -32,16 +32,18 @@ function isFinalPose(pose: PagePose): boolean {
 const kinds = fc.constantFrom<SummonKind>('full', 'short');
 const directions = fc.constantFrom<SummonDirection>('summon', 'dismiss');
 
+/** The longest summon plus dismissal, so the generators cover every end. */
+const LONGEST = Math.max(...Object.values(SUMMON_TIMINGS).map((d) => d.inSeconds + d.outSeconds));
 /** Time including NaN, the infinities, negatives, zero, the exact ends and values far beyond them. */
 const anyTime = fc.oneof(
   fc.double(),
-  fc.double({ min: -2, max: 4, noNaN: true }),
-  fc.constantFrom(0, 0.2, 0.3, 0.5, 0.6, 1.4, 2, 1e9, -1e9, Infinity, -Infinity, Number.NaN),
+  fc.double({ min: -2, max: LONGEST + 2, noNaN: true }),
+  fc.constantFrom(0, ...Object.values(SUMMON_TIMINGS).flatMap((d) => [d.inSeconds, d.outSeconds, d.inSeconds + d.outSeconds]), 1e9, -1e9, Infinity, -Infinity, Number.NaN),
 );
 const orderedTime = fc.oneof(
   fc.double({ noNaN: true }),
-  fc.double({ min: -2, max: 4, noNaN: true }),
-  fc.constantFrom(0, 0.2, 0.3, 0.5, 0.6, 1.4, 2, 1e9, -1e9, Infinity, -Infinity),
+  fc.double({ min: -2, max: LONGEST + 2, noNaN: true }),
+  fc.constantFrom(0, ...Object.values(SUMMON_TIMINGS).flatMap((d) => [d.inSeconds, d.outSeconds, d.inSeconds + d.outSeconds]), 1e9, -1e9, Infinity, -Infinity),
 );
 
 describe('page summon core is pure', () => {
@@ -70,8 +72,8 @@ describe('page summon core is pure', () => {
     const out = newPose();
     const outgoing = newPose();
     const incoming = newPose();
-    expect(writePagePose('summon', 'full', 0.5, false, out)).toBe(out);
-    writeSwap('short', 0.25, false, outgoing, incoming);
+    expect(writePagePose('summon', 'full', SUMMON_TIMINGS.full.inSeconds / 2, false, out)).toBe(out);
+    writeSwap('short', SUMMON_TIMINGS.short.outSeconds / 2, false, outgoing, incoming);
     expect(Object.keys(out)).toEqual(['opacity', 'offsetY', 'tilt', 'scale']);
     expect(Object.keys(outgoing)).toEqual(['opacity', 'offsetY', 'tilt', 'scale']);
     expect(Object.keys(incoming)).toEqual(['opacity', 'offsetY', 'tilt', 'scale']);
@@ -79,10 +81,10 @@ describe('page summon core is pure', () => {
 });
 
 describe('page summon examples', () => {
-  it('has the documented timings and 40 motes at most', () => {
-    expect(SUMMON_TIMINGS.full).toEqual({ inSeconds: 1.4, outSeconds: 0.6 });
-    expect(SUMMON_TIMINGS.short).toEqual({ inSeconds: 0.3, outSeconds: 0.2 });
-    expect(MOTES_MAX).toBe(40);
+  it('has the documented timings and 100 motes at most', () => {
+    expect(SUMMON_TIMINGS.full).toEqual({ inSeconds: 2.2, outSeconds: 0.9 });
+    expect(SUMMON_TIMINGS.short).toEqual({ inSeconds: 0.5, outSeconds: 0.3 });
+    expect(MOTES_MAX).toBe(100);
     expect(summonDurations('full', true)).toEqual({ inSeconds: 0, outSeconds: 0 });
   });
 

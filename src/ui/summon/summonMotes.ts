@@ -16,7 +16,10 @@ const SEED_TARGET_X = 3;
 const SEED_TARGET_Y = 4;
 const SEED_SWAY = 5;
 const SEED_SIZE = 6;
-const SEED_FIELDS = 7;
+const SEED_TWINKLE_PHASE = 7;
+const SEED_TWINKLE_RATE = 8;
+const SEED_LARGE = 9;
+const SEED_FIELDS = 10;
 
 /** Largest page extent used, so no product below can overflow. */
 const MAX_EXTENT = 1e6;
@@ -31,7 +34,7 @@ export interface MoteBuffer {
   readonly seeds: Float32Array;
 }
 
-/** 0 when motion is instant, otherwise 30, 36 or 40 for Low, Medium and High. */
+/** 0 when motion is instant, otherwise 60, 80 or 100 for Low, Medium and High. */
 export function moteCount(quality: QualityLevel, instant: boolean): number {
   return instant ? 0 : MOTE_COUNTS[quality];
 }
@@ -77,6 +80,9 @@ export function createMoteBuffer(): MoteBuffer {
     seeds[base + SEED_TARGET_Y] = halton(i + 1, 3);
     seeds[base + SEED_SWAY] = hash(i, 4);
     seeds[base + SEED_SIZE] = hash(i, 5);
+    seeds[base + SEED_TWINKLE_PHASE] = hash(i, 6);
+    seeds[base + SEED_TWINKLE_RATE] = hash(i, 7);
+    seeds[base + SEED_LARGE] = hash(i, 8);
   }
   return {
     x: new Float32Array(MOTES_MAX),
@@ -101,10 +107,29 @@ function activeLimit(count: number): number {
 }
 
 /**
+ * The twinkle of one mote at time `t`: a factor in [1 - twinkleDepth, 1] that pulses at a rate and phase taken
+ * from the mote's seeds (`phase` and `rate` in [0, 1)). It never reaches 0, so it never hides a mote on its own.
+ * Non-finite input counts as 0.
+ */
+export function twinkleFactor(t: number, phase: number, rate: number): number {
+  const time = Number.isFinite(t) ? t : 0;
+  const p = Number.isFinite(phase) ? phase : 0;
+  const r = Number.isFinite(rate) ? rate : 0;
+  const hz = SUMMON_LOOK.twinkleHzMin + (SUMMON_LOOK.twinkleHzMax - SUMMON_LOOK.twinkleHzMin) * r;
+  // Whole turns are dropped first, so a huge time cannot overflow into a NaN.
+  const turns = hz * time + p;
+  const fraction = Number.isFinite(turns) ? turns % 1 : 0;
+  const wave = 0.5 + 0.5 * Math.sin(TAU * fraction);
+  return 1 - SUMMON_LOOK.twinkleDepth * wave;
+}
+
+/**
  * Writes the motes of a page at time `t` into `buffer` and returns how many have an alpha above 0.
- * Summon: each mote starts on a ring around the page and spirals inward to a Halton point inside it,
- * arriving before the end of the summon. Dismiss: each mote starts inside the page and drifts up.
- * Every alpha is 0 at `t <= 0`, at `t >= duration`, for non-finite `t`, and when motion is instant.
+ * Summon: each mote starts behind or around the page (a ring of 0.15 to 1.05 of the half-diagonal around its
+ * target) and spirals inward to a Halton point inside it, arriving before the end of the summon.
+ * Dismiss: each mote starts inside the page and drifts up. Every alpha twinkles with its own phase and rate.
+ * Sizes are 1 to 4 px, with a few larger, softer motes. Every alpha is 0 at `t <= 0`, at `t >= duration`,
+ * for non-finite `t`, and when motion is instant.
  */
 export function writeMotes(
   direction: SummonDirection,
@@ -121,7 +146,6 @@ export function writeMotes(
   const duration = direction === 'summon' ? durations.inSeconds : durations.outSeconds;
   const limit = activeLimit(count);
   if (instant || limit === 0 || !(duration > 0) || !Number.isFinite(t) || !(t > 0) || t >= duration) return 0;
-
   const w = extent(width);
   const h = extent(height);
   const halfDiagonal = 0.5 * Math.hypot(w, h);
@@ -129,27 +153,33 @@ export function writeMotes(
   const eased = summonProgress('summon', kind, t, false);
   const ringSpan = SUMMON_LOOK.ringMax - SUMMON_LOOK.ringMin;
   const sizeSpan = SUMMON_LOOK.moteSizeMax - SUMMON_LOOK.moteSizeMin;
+  const largeSpan = SUMMON_LOOK.largeMoteSizeMax - SUMMON_LOOK.moteSizeMax;
   let active = 0;
-
   for (let i = 0; i < limit; i++) {
     const base = i * SEED_FIELDS;
-    const targetX = buffer.seeds[base + SEED_TARGET_X] * w;
-    const targetY = buffer.seeds[base + SEED_TARGET_Y] * h;
-    buffer.size[i] = SUMMON_LOOK.moteSizeMin + sizeSpan * buffer.seeds[base + SEED_SIZE];
+    const targetX = (buffer.seeds[base + SEED_TARGET_X] ?? 0) * w;
+    const targetY = (buffer.seeds[base + SEED_TARGET_Y] ?? 0) * h;
+    const sizeSeed = buffer.seeds[base + SEED_SIZE] ?? 0;
+    const large = (buffer.seeds[base + SEED_LARGE] ?? 1) < SUMMON_LOOK.largeMoteFraction;
+    buffer.size[i] = large ? SUMMON_LOOK.moteSizeMax + largeSpan * sizeSeed : SUMMON_LOOK.moteSizeMin + sizeSpan * sizeSeed;
+    const peak =
+      SUMMON_LOOK.moteAlpha *
+      (large ? SUMMON_LOOK.largeMoteAlpha : 1) *
+      twinkleFactor(t, buffer.seeds[base + SEED_TWINKLE_PHASE] ?? 0, buffer.seeds[base + SEED_TWINKLE_RATE] ?? 0);
     if (direction === 'summon') {
-      const q = eased / buffer.seeds[base + SEED_ARRIVAL];
+      const q = eased / (buffer.seeds[base + SEED_ARRIVAL] ?? 1);
       const left = q < 1 ? 1 - q : 0;
-      const ring = (SUMMON_LOOK.ringMin + ringSpan * buffer.seeds[base + SEED_RING]) * halfDiagonal * left;
-      const angle = TAU * (buffer.seeds[base + SEED_ANGLE] + SUMMON_LOOK.swirlTurns * (q < 1 ? q : 1));
+      const ring = (SUMMON_LOOK.ringMin + ringSpan * (buffer.seeds[base + SEED_RING] ?? 0)) * halfDiagonal * left;
+      const angle = TAU * ((buffer.seeds[base + SEED_ANGLE] ?? 0) + SUMMON_LOOK.swirlTurns * (q < 1 ? q : 1));
       buffer.x[i] = targetX + ring * Math.cos(angle);
       buffer.y[i] = targetY + ring * Math.sin(angle);
-      buffer.alpha[i] = q > 0 && q < 1 ? SUMMON_LOOK.moteAlpha * Math.sin(Math.PI * q) : 0;
+      buffer.alpha[i] = q > 0 && q < 1 ? peak * Math.sin(Math.PI * q) : 0;
     } else {
-      buffer.x[i] = targetX + SUMMON_LOOK.moteSway * Math.sin(TAU * (buffer.seeds[base + SEED_SWAY] + raw));
+      buffer.x[i] = targetX + SUMMON_LOOK.moteSway * Math.sin(TAU * ((buffer.seeds[base + SEED_SWAY] ?? 0) + raw));
       buffer.y[i] = targetY - SUMMON_LOOK.moteLift * raw;
-      buffer.alpha[i] = SUMMON_LOOK.moteAlpha * Math.sin(Math.PI * raw);
+      buffer.alpha[i] = peak * Math.sin(Math.PI * raw);
     }
-    if (buffer.alpha[i] > 0) active++;
+    if ((buffer.alpha[i] ?? 0) > 0) active++;
   }
   return active;
 }

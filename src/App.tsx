@@ -27,6 +27,7 @@ import { useDemoProjectsKey } from './ui/useDemoProjectsKey';
 import { COPY, qualityLowered } from './ui/copy';
 import { Button } from './ui/kit';
 import RitualOverlay from './ui/ritual/RitualOverlay';
+import { SummonLayer } from './ui/summon';
 
 /** Returns true if the browser can create a WebGL context. */
 function isWebGLAvailable(): boolean {
@@ -150,6 +151,7 @@ export default function App() {
       <ControlsHint />
       <BookReader />
       <RitualOverlay />
+      <SummonLayer />
     </div>
   );
 }

@@ -36,11 +36,14 @@ export function finiteOr(value: number, fallback: number): number {
   return Number.isFinite(value) ? value : fallback;
 }
 
-/** `angle` wrapped into [-PI, PI]: the shortest turn with the same effect. A bad number counts as 0. */
+/**
+ * `angle` wrapped into (-PI, PI]: the shortest turn with the same effect. A half turn is always +PI
+ * (both 3 PI and -PI give +PI). A bad number counts as 0.
+ */
 export function wrapPi(angle: number): number {
   const wrapped = finiteOr(angle, 0) % TWO_PI;
   if (wrapped > Math.PI) return wrapped - TWO_PI;
-  if (wrapped < -Math.PI) return wrapped + TWO_PI;
+  if (wrapped <= -Math.PI) return wrapped + TWO_PI;
   return wrapped;
 }
 

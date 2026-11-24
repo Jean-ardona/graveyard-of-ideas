@@ -213,6 +213,7 @@ describe('closing checklist', () => {
       ritualMachine.send({ type: 'NEXT' });
     }
     render(<RitualOverlay />);
+    fireEvent.click(document.body); // lands the page: before that, Enter only lands it
     const field = document.getElementById('ritual-field') as HTMLInputElement;
     act(() => {
       fireEvent.keyDown(field, { key: 'Enter' });

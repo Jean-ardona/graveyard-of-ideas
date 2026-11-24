@@ -4,6 +4,7 @@ import { Vector3 } from 'three';
 import { allowsInteraction, selectFocus } from './interactables';
 import { activateFocused, getInteractables, setFocused } from './interactionState';
 import { getPointerMode } from './pointerLock';
+import { markStartTurn } from './startKeyGuard';
 import { isTypingTarget } from './typingTarget';
 
 /** The focus is recomputed at most this often (20 times per second). */
@@ -26,7 +27,13 @@ export default function InteractionController({ enabled = true }: { enabled?: bo
     function onKeyDown(event: KeyboardEvent) {
       if (event.key.toLowerCase() !== 'e' || event.repeat) return;
       if (isTypingTarget(event.target) || event.ctrlKey || event.metaKey || event.altKey) return;
-      if (allowsInteraction(getPointerMode())) activateFocused();
+      if (!allowsInteraction(getPointerMode())) return;
+      // The E that opens a page must never be typed into it: no default action, and the page drops
+      // any input that still arrives in this event turn (see `startKeyGuard`).
+      if (activateFocused()) {
+        event.preventDefault();
+        markStartTurn();
+      }
     }
     window.addEventListener('keydown', onKeyDown);
     return () => {

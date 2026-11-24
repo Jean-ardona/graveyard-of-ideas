@@ -364,3 +364,91 @@ Open decisions: the specter part of 7.2 is reworked by tasks 13.2 to 13.5 (prope
 - **Decisions:** the extra look numbers the task text does not list (opacity gain 1.5, out scale 0.02, mote sway 6 px, ring 0.6 to 1.1, earliest arrival 0.55) are in `SUMMON_LOOK`. `isLanded` is `t >= inSeconds` (as the design says) and not "eased progress is 1", because the eased value rounds to 1 slightly before the end. `writeMotes` treats non-finite `t` as 0, caps page sizes at 1e6 px so products cannot overflow, and writes only the first `count` motes (clamped to 0 to 40; the 30 floor applies to `clampMoteCount` and `moteCount`). The dismiss offset is written as `0 - lift * p` so it is +0, not -0, at the start. Mote alpha is `0.8 * sin(pi * q)`, which is 0 at both ends. The seed table is a Float32Array in the buffer (`seeds`), filled from an integer hash and Halton targets.
 - **Tests:** `pageSummon.test.ts` (Properties 91, 92, 93, 95, 200 runs; purity scan of the three sources; no-allocation scan of `writePagePose` and `writeSwap`; examples) and `summonMotes.test.ts` (Properties 91, 94, 95, 200 runs; purity scan; no-allocation scan of `writeMotes` and array identity; examples). Not run by me: the suite and the build are run by the user.
 - **Files changed:** `src/ui/summon/summonTimings.ts`, `pageSummon.ts`, `summonMotes.ts` (new); `src/tests/pageSummon.test.ts`, `summonMotes.test.ts` (new); `.kiro/specs/graveyard-core/tasks.md` (13.7 ticked); `docs/KIRO_LOG.md`.
+
+## Task 13.8a: Page summon UI, controller, layer and wrapper (13.8b, the wiring, is not done)
+- **Spec:** task 13.8, first half (the split the task allows), requirements 3.2, 5.1, 8.2, 8.3, 9.2, 9.3, 10.1 and 10.2. No playbook entry (13.9 writes them). Nothing is wired yet: the ritual overlay and the resurrection dialog still use their 180 ms fades, and itualKeys has no landed argument.
+- **Done:** summonController.ts (factory createSummonController and the app singleton): one equestAnimationFrame loop that runs only while a page animates, one performance.now() read per frame, a pool of 4 preallocated slots, per-frame writes limited to style.transform and style.opacity, motes drawn from the preallocated buffer with one 16 by 16 sprite in the mist token and globalAlpha, the canvas cleared and hidden once when idle, the resize listener present only while animating. API: start (with delaySeconds and onDone), land, cancel, isAnimating, ttachLayer, detachLayer. SummonLayer.tsx: one canvas, ria-hidden, pointer-events: none, renders nothing with reduced animations or calm mode, detaches (landing every page) on unmount. SummonedPage.tsx: class component (it needs getSnapshotBeforeUpdate to copy the old page before React replaces it) with props pageKey, open, kind, swapKind, instant, quality, onLandedChange, onDismissed and a land() method. index.ts, CSS (.summon-stage, .summon-page, .summon-retiring, .summon-layer, tokens only) and <SummonLayer /> in App.tsx.
+- **Decisions:** the frozen outgoing copy is a DOM clone of the page (ids removed, inert, ria-hidden), not a second React render, so it cannot take focus or duplicate ids. A swap starts the outgoing dismissal and the incoming summon together; the incoming one has a delay equal to the outgoing duration, so it is mounted and focused at once but invisible until the outgoing page is gone. A click lands the page through window listeners for pointerdown and click that exist only while a summon runs. The page rectangle is measured only when an animation starts or on resize. A page that dissolves keeps its last children. Landing does not call preventDefault or stop propagation. 13.8b decides how Escape, Enter and Space reach land().
+- **Open for 13.8b:** the resurrection dialog has no key handler of its own today (Escape goes through eadingKeys), so 13.8b has to add one or extend eadingKeys.
+- **Tests:** summonController.test.ts (loop and idle, pose, delay, land, cancel, canvas, pixel ratio, detach, source scans for the frame path, one clock read, color literals, lights) and summonedPage.test.tsx (summon, focus, typed text kept, landing by click and by land(), instant mode, swap with never two pages visible, dismiss, SummonLayer), with the shared summonHarness.ts. I ran these two files plus skin.test.ts and copyCoverage.test.ts (all pass) and 	sc --noEmit (clean). I did not run the full suite or the build.
+- **Files changed:** src/ui/summon/summonController.ts, SummonLayer.tsx, SummonedPage.tsx, index.ts (new); src/ui/kit/haunted.css, src/App.tsx; src/tests/summonController.test.ts, summonedPage.test.tsx, summonHarness.ts (new); .kiro/specs/graveyard-core/tasks.md; docs/KIRO_LOG.md.
+
+## Task 13.8b: Page summon wiring (task 13.8 complete)
+- **Spec:** task 13.8, second half, requirements 3.2, 5.1, 8.2, 8.3, 9.2, 9.3, 10.1, 10.2, 13.1 and 13.2. No playbook entry (13.9 writes them).
+- **Done:** `RitualOverlay` renders its page through `SummonedPage`: full summon for the first page, short swap between steps (`pageKey` is the step; the old page dissolves in 0.2 s as a frozen `inert` copy, then the new one rises in 0.3 s), and full dismiss (0.6 s) when the machine leaves `writing` on commit or cancel. The page stays mounted only for the dissolve (`present` state); the machine, the store and the pointer request never wait for it, so a cancel leaves `inputLocked` false and `attachRitualSession` requests the pointer in the same handler, as before. `ResurrectConfirm` renders through `SummonedPage` with full summon and full dismiss; `BookPageOverlay` keeps it mounted while it dissolves (`confirmPresent`) and passes `open` and `onDismissed`. The 180 ms fades (`PAGE_FADE_MS`, the `data-phase` swap, `@keyframes ritual-in` and its CSS) are removed.
+- **Keys:** `routeRitualKey` takes `landed`. When `landed` is false, Escape, Enter and Space return `LAND` in `writing` and `cinematic`; once landed, the mapping is unchanged. `BurialDriver` passes `true`, because the ritual page is gone during the cinematic. The dialog had no key handler, so `routeReadingKey` gained a `confirmLanded` argument (null without a dialog), and `useReadingInput` calls `land()` on `LAND`. The link is a small UI-only module, `src/book/resurrectGate.ts` (never persisted): the dialog registers its `land()` and reports landed changes.
+- **Decisions:**
+  - Typing always reaches the machine (`EDIT` is not gated), so characters typed before landing are kept.
+  - Only the buttons wait for landing.
+  - On `LAND` in the ritual, a Space or Shift+Enter typed in the field is still typed. Any other landing key is prevented.
+  - The landing click is now caught on `click` only (no longer on `pointerdown`). It is stopped and prevented, so it never reaches a button under the rising page. Without this, a click or a keyboard-activated button could confirm the resurrection before landing.
+- **Tests:** `ritualKeys.test.ts` (existing cases with `landed` true; `LAND` before landing; never NEXT, SEAL, CANCEL or SKIP_CINEMATIC before landing), `readingKeys.test.ts` (dialog cases), `ritualOverlay.test.tsx` (rewritten on the frame clock: full first summon, the landing keys and click, typed text kept, Ctrl+Enter refused before landing, the short swap with an inert copy and never two pages visible, an early click landing, the full dismiss on cancel and on seal, restart during a dissolve, reduced motion and calm mode, roles and button order), `resurrectRequest.test.tsx` (flow with landing and dissolve; full summon and dismiss; a click only lands; Escape, Enter and Space land without closing the book; instant motion), and `ritualIntegration.test.tsx` (the page is landed before the double Enter). I ran `tsc --noEmit` (clean) and the full suite: 894 of 895 pass. The one failure predates this task. `cameraPose.test.ts` expects `wrapPi(3 * Math.PI)` to be `-pi` and gets `+pi`; neither file is touched here, so I did not fix it. I did not run the build.
+- **Not verified without the target machine:** the feel at 100% zoom (deferred to 13.9).
+- **Files changed:** `src/ui/ritual/RitualOverlay.tsx`, `src/book/ResurrectConfirm.tsx`, `src/book/BookPageOverlay.tsx`, `src/book/readingKeys.ts`, `src/book/useReadingInput.ts`, `src/book/resurrectGate.ts` (new), `src/interaction/ritualKeys.ts`, `src/cinematics/BurialDriver.tsx` (one argument), `src/ui/summon/SummonedPage.tsx` (landing click), `src/ui/summon/summonMotes.ts` and `src/tests/summonMotes.test.ts` (`?? 0` on typed-array reads for `noUncheckedIndexedAccess`, no behavior change), `src/ui/kit/haunted.css`; tests `ritualKeys.test.ts`, `readingKeys.test.ts`, `ritualOverlay.test.tsx`, `resurrectRequest.test.tsx`, `ritualIntegration.test.tsx`; `.kiro/specs/graveyard-core/tasks.md`; `docs/KIRO_LOG.md`.
+
+## Fix after 13.8b: summoned pages never landed in the browser (blocking), and `wrapPi` sign
+- **Symptom:** in the running app, once a ritual page or the resurrection dialog had risen, its buttons did nothing and it could not be closed.
+- **Cause:** `main.tsx` renders the app in `<StrictMode>`. In development, React 18 StrictMode runs `componentDidMount`, `componentWillUnmount`, then `componentDidMount` again on the same class instance. `SummonedPage` set `this.unmounted = true` on the simulated unmount and never reset it. The second summon then ran and removed its inline pose, but `handleLanded` returned early.
+  - `landed` stayed false, so the page kept `pointer-events: none`.
+  - The click-capture listener stayed on and swallowed every click.
+  - `onDismissed` was skipped too, so the page could not leave.
+  - The tests never mounted in StrictMode, so they did not see it.
+- **Fix:** `componentDidMount` resets `unmounted`.
+- **Safety net:**
+  - A landing deadline: in-duration plus `LANDING_MARGIN_SECONDS` (0.25 s), on a plain `setTimeout` in `SummonedPage`, not in the controller. After it the page is landed whatever the frame loop did.
+  - A matching dismissal deadline that reports `onDismissed` exactly once.
+  - `land()` marks the page landed even when the controller no longer animates it.
+  - The click listener swallows a click only while the page is rising.
+  - A second Escape before landing always cancels the ritual or closes the book: `routeRitualKey` and `routeReadingKey` take `escapesBeforeLanding`. `RitualOverlay` and `resurrectGate` count Escapes and reset the count on each landed change.
+- **`wrapPi`:** the convention is now (-pi, pi], so a half turn is always +pi (`3 pi` and `-pi` give `+pi`). The function and `cameraPose.test.ts` were changed to match. Every caller (`blendPose` and the yaw checks of Properties 87 and 89) either uses the absolute value or blends by it, and at an exact half turn both directions are equally short, so no camera property depends on the sign.
+- **Tests:** new `summonLanding.test.tsx` uses fake timers that drive `requestAnimationFrame` and `performance.now` from one clock, under StrictMode with the layer mounted. It checks that:
+  - the page lands after the in-duration, with pointer events on, the button working and no inline pose;
+  - the frame loop lands it before the deadline;
+  - the deadline lands it with no frames at all;
+  - the first click lands it without pressing the button under it, and later clicks pass through;
+  - the dismissal is reported under StrictMode, both with frames and by the deadline without frames;
+  - the ritual page lands, its buttons work and Escape cancels;
+  - Escape pressed twice cancels before landing;
+  - the dialog lands and its buttons work.
+
+  `ritualKeys.test.ts` and `readingKeys.test.ts` gained the safety-rule cases. I checked that the main regression test fails with the fix and the deadline removed (`data-landed` stays `false`), then restored them.
+- **Results, run by me:** `npx vitest run` passes all 907 tests in 81 files, `cameraPose.test.ts` included. `npm run build` (`tsc --noEmit && vite build`) succeeds; Vite's warning that the main chunk is larger than 500 kB is not new.
+- **Note:** part of this fix (`summonLanding.test.tsx`, the `wrapPi` change and the Escape count in `RitualOverlay`) was first written by a second session running at the same time. I took it over, removed a duplicated `escapesRef` it left in `RitualOverlay.tsx`, and kept the rest.
+- **Files changed:** `src/ui/summon/SummonedPage.tsx`, `src/ui/ritual/RitualOverlay.tsx`, `src/interaction/ritualKeys.ts`, `src/book/readingKeys.ts`, `src/book/useReadingInput.ts`, `src/book/resurrectGate.ts`, `src/cinematics/cameraPose.ts`; tests `src/tests/summonLanding.test.tsx` (new), `ritualKeys.test.ts`, `readingKeys.test.ts`, `cameraPose.test.ts`; `docs/KIRO_LOG.md`.
+
+## Visual upgrade of the page summon (after the landing fix)
+- **Scope:** constants, the mote writer and the edge glow only. Landing logic, keys and state handling are unchanged.
+- **Timings (`summonTimings.ts`):** full in 2.2 s / out 0.9 s (was 1.4 / 0.6); short in 0.5 s / out 0.3 s (was 0.3 / 0.2). The landing and dismissal deadlines in `SummonedPage` already come from `summonDurations` plus `LANDING_MARGIN_SECONDS`, so they follow without a code change.
+- **Motes:** `MOTES_MIN` 60, `MOTES_MAX` 100, `MOTE_COUNTS` 60 / 80 / 100 for Low / Medium / High.
+  - Ordinary sizes are 1 to 4 px. About 8% of the motes (`largeMoteFraction`) are larger, up to 7 px, at 0.45 of the alpha.
+  - The start ring is now 0.15 to 1.05 of the half-diagonal around each target (was 0.6 to 1.1), so motes start both behind the page and around it.
+  - The canvas margin grew from 96 to 160 px so the wider ring stays on the canvas.
+- **Twinkle:** a new pure `twinkleFactor(t, phase, rate)` returns a factor in [0.55, 1] (depth 0.45, 1.5 to 3.5 Hz). Its phase and rate come from two new seed fields per mote, so each mote twinkles on its own, and the same time always gives the same alpha. Whole turns are dropped before the sine, so very large times cannot overflow into NaN; the property test found that case. Instant motion still writes no motes.
+- **Edge glow:** CSS only, `.summon-page::after`, a `box-shadow` in `--color-mist` at opacity 0.32 while the page rises (`data-landed='false'`, not inert). It fades out over 700 ms once the page lands. No amber, no new light, nothing per frame.
+- **Tests:**
+  - Every summon test now takes its times from the constants, through `SUMMON_MS` in `summonHarness.ts`: in, out, after-in, after-out, after the deadline, after a swap, and points during an animation.
+  - The time generators of Properties 91 to 95 use the ends of the constants instead of fixed numbers.
+  - Property 94 now checks the 60 to 100 range and the 60 / 80 / 100 counts.
+  - New mote tests: sizes and the few large motes; motes starting both inside and outside the page; `twinkleFactor` bounded and deterministic for any input (200 runs); twinkle repeatable at the same time and different between motes.
+  - The no-allocation scan of `writeMotes` still passes.
+- **Results, run by me:** `tsc --noEmit` passes, and the full suite passes (911 tests in 81 files). I did not run the build.
+- **Frame rate at Low during the summon: not measured.** I have no access to the target machine or a real browser; the tests run in jsdom with a fake clock, so any number from them would be invented. What changed per frame on Low: 60 `drawImage` calls instead of 30 with one 16 px sprite at pixel ratio 1, two style writes on the page, and one CSS shadow that does not change while the page rises. The 13.9 checkpoint has a row for this measurement.
+- **Files changed:** `src/ui/summon/summonTimings.ts`, `summonMotes.ts`, `summonController.ts` (margin only), `src/ui/kit/haunted.css`; tests `src/tests/summonHarness.ts`, `pageSummon.test.ts`, `summonMotes.test.ts`, `summonController.test.ts`, `summonedPage.test.tsx`, `summonLanding.test.tsx`, `ritualOverlay.test.tsx`, `resurrectRequest.test.tsx`; `docs/KIRO_LOG.md`.
+
+## Fix: the E that starts the ritual was typed into the first field
+- **Cause:** `InteractionController` ran the lectern action on the E keydown without preventing its default. The ritual page mounted and its first field took focus during that event, so the browser then typed "e" into the field. Key repeat was already ignored (`event.repeat`).
+- **Fix:**
+  - `activateFocused()` now returns whether a handler ran.
+  - When one runs, `InteractionController` calls `preventDefault()` and `markStartTurn()`. This is the one E handler for every interactable, so it covers every E-started page now and later.
+  - New UI-only `src/interaction/startKeyGuard.ts` (`markStartTurn`, `isStartTurn`, cleared by a 0 ms timer at the end of the task). `RitualOverlay` drops an `EDIT` on its first field while `isStartTurn()` is true.
+  - E with nothing to activate is not prevented.
+- **Other E-started pages:** E also enters the hut and opens a book; neither focuses a text field. The resurrection dialog opens from a button, not from E, and has no text field, so `SummonedPage` finds nothing to focus there. Any page that E opens later gets the `preventDefault` from `InteractionController`. If it has a text field, it can also check `isStartTurn()`.
+- **Tests:** new `startKey.test.tsx` mounts the real `InteractionController` and `RitualOverlay`. It simulates the browser by typing the letter into the focused element only when the keydown was not prevented. It checks that:
+  - starting with E leaves the field and the draft empty;
+  - an input on the field in the same event turn is dropped;
+  - holding E (repeat) changes nothing;
+  - typing works after the turn, the letter e included;
+  - E with nothing focused is not prevented.
+
+  With the `preventDefault` and the guard call removed, 3 of the 5 tests fail. I ran `tsc --noEmit` (passes) and the ritual, copy and skin test files (101 pass); not the full suite or the build.
+- **Files changed:** `src/interaction/startKeyGuard.ts` (new), `src/interaction/interactionState.ts`, `src/interaction/InteractionController.tsx`, `src/ui/ritual/RitualOverlay.tsx`; `src/tests/startKey.test.tsx` (new); `docs/KIRO_LOG.md`.

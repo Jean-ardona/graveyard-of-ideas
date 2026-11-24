@@ -3,6 +3,7 @@ import type { PointerEvent as ReactPointerEvent } from 'react';
 import { isTypingTarget } from '../interaction/typingTarget';
 import { cancelPageDrag, closeBook, endPageDrag, turnPage } from './readingBook';
 import { routeReadingKey } from './readingKeys';
+import { resurrectGate } from './resurrectGate';
 import { readingMachine } from './readingMachine';
 import type { DragSide } from './pageTurn';
 
@@ -16,10 +17,15 @@ export function useReadingInput(): void {
     function onKeyDown(event: KeyboardEvent): void {
       if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
       const dragging = readingMachine.pages.status === 'dragging';
-      const action = routeReadingKey(event.key, isTypingTarget(event.target), readingMachine.phase(), dragging);
+      const action = routeReadingKey(event.key, isTypingTarget(event.target), readingMachine.phase(), dragging, resurrectGate.landed(), resurrectGate.escapes());
       if (action === null) return;
       event.preventDefault();
-      if (action === 'CLOSE') closeBook();
+      if (action === 'LAND') {
+        // Counted after landing, which resets the count: it only stays above 0 if the dialog did not land.
+        resurrectGate.land();
+        if (event.key === 'Escape') resurrectGate.noteEscape();
+      }
+      else if (action === 'CLOSE') closeBook();
       else if (action === 'CANCEL_DRAG') cancelPageDrag();
       else turnPage(action === 'NEXT_PAGE' ? 'next' : 'prev');
     }

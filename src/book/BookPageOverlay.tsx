@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AnimationEvent, CSSProperties, TransitionEvent } from 'react';
 import type { Project, ResurrectInput } from '../domain';
 import { useAppStore } from '../store/appStore';
@@ -127,10 +127,15 @@ export default function BookPageOverlay({ project, onResurrect }: BookPageOverla
   const leftDrag = usePageDrag(() => leftSurface.current?.getBoundingClientRect().width ?? 0, 'left');
   const [asked, setAsked] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  // The dialog stays mounted while it dissolves, after confirming has gone back to false.
+  const [confirmPresent, setConfirmPresent] = useState(false);
   const request = checkResurrectRequest(project);
   // The "needed" message disappears as soon as a next action is saved; the confirm view follows the saved text.
   const needsNextAction = asked && !request.ok;
   const showConfirm = confirming && request.ok;
+  useEffect(() => {
+    if (showConfirm) setConfirmPresent(true);
+  }, [showConfirm]);
   const pressResurrect = (): void => {
     setAsked(true);
     setConfirming(request.ok);
@@ -231,14 +236,16 @@ export default function BookPageOverlay({ project, onResurrect }: BookPageOverla
       >
         {COPY.book.close}
       </Button>
-      {showConfirm && request.ok && (
+      {(showConfirm || confirmPresent) && (
         <ResurrectConfirm
-          request={request}
+          request={showConfirm && request.ok ? request : null}
+          open={showConfirm}
           onBack={() => setConfirming(false)}
           onConfirm={() => {
             setConfirming(false);
-            onResurrect?.(request.input);
+            if (request.ok) onResurrect?.(request.input);
           }}
+          onDismissed={() => setConfirmPresent(false)}
         />
       )}
     </section>
