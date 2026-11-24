@@ -56,6 +56,7 @@ export const COLORS = {
   bookSpine: '#1f2c47',
   engraving: '#2b3347',
   engravingEdge: '#a3adc2',
+  quill: '#c9ccd6',
   /** The only warm tone in the scene. */
   lantern: '#ffe9a8',
 } as const;

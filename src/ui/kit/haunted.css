@@ -1,0 +1,562 @@
+/* The haunted skin. Colors, fonts, spacing, radii and cursors come from the token variables only. */
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--color-mist);
+  cursor: var(--cursor-default);
+  scrollbar-color: var(--color-field-border) var(--color-night-800);
+}
+
+::selection {
+  background: var(--color-focus);
+  color: var(--color-night-900);
+}
+
+::-webkit-scrollbar {
+  width: var(--space-2);
+  height: var(--space-2);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-field-border);
+  border-radius: var(--radius-small);
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-night-800);
+}
+
+button,
+input,
+select,
+textarea,
+dialog {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* Cursors */
+
+button:not(:disabled),
+[role='switch'],
+[role='menuitem'],
+[role='radio'] {
+  cursor: var(--cursor-pointer);
+}
+
+input,
+textarea {
+  cursor: var(--cursor-text);
+}
+
+.book-page-surface[data-grab='true'] {
+  cursor: var(--cursor-grab);
+}
+
+.book-page-surface[data-dragging='true'],
+.book-page-surface[data-dragging='true'] * {
+  cursor: var(--cursor-grabbing);
+}
+
+/* Kit components */
+
+.kit-button,
+.kit-choice-option {
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-night-700);
+  color: var(--color-mist);
+  border: 1px solid var(--color-button-border);
+  border-radius: var(--radius-medium);
+}
+
+.kit-button:disabled {
+  opacity: 0.6;
+}
+
+.kit-field {
+  display: block;
+  width: 100%;
+  padding: var(--space-0) var(--space-1);
+  background: var(--color-field-fill);
+  color: var(--color-ink);
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--radius-small);
+}
+
+.kit-field:focus-visible {
+  outline-color: var(--color-ink);
+}
+
+.kit-panel {
+  padding: var(--space-3);
+  background: var(--color-night-800);
+  color: var(--color-mist);
+  border: 1px solid var(--color-button-border);
+  border-radius: var(--radius-medium);
+}
+
+/* The grimoire: a still panel, with no transition or animation. */
+
+.grimoire-layer {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  outline: none;
+}
+
+.grimoire-panel {
+  width: min(560px, 92vw);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.grimoire-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.grimoire-panel h2,
+.grimoire-panel h3 {
+  margin: 0;
+  font-weight: normal;
+}
+
+.grimoire-group {
+  margin-top: var(--space-3);
+}
+
+.grimoire-group p {
+  margin: var(--space-1) 0 0;
+}
+
+.grimoire-detail dl {
+  margin: var(--space-2) 0;
+}
+
+.grimoire-detail dt {
+  margin-top: var(--space-2);
+}
+
+.grimoire-detail dd {
+  margin: var(--space-0) 0 0;
+  overflow-wrap: anywhere;
+}
+
+.kit-prompt {
+  position: fixed;
+  padding: var(--space-0) var(--space-2);
+  background: var(--color-night-800);
+  color: var(--color-mist);
+  border-radius: var(--radius-small);
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 150ms ease-out;
+}
+
+.kit-prompt-below {
+  top: 56%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 92;
+}
+
+.kit-prompt-center {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: var(--space-2) var(--space-4);
+  font-size: 1.2rem;
+  z-index: 95;
+}
+
+.kit-prompt-bottom {
+  bottom: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  z-index: 90;
+}
+
+.kit-prompt-corner {
+  top: 38px;
+  left: var(--space-1);
+  z-index: 100;
+}
+
+.kit-menu {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kit-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+.kit-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-0) 0;
+  background: none;
+  border: 0;
+}
+
+.kit-toggle-knob {
+  display: inline-block;
+  width: 2rem;
+  height: 1rem;
+  background: var(--color-night-700);
+  border: 1px solid var(--color-button-border);
+  border-radius: 1rem;
+}
+
+.kit-toggle[aria-checked='true'] .kit-toggle-knob {
+  background: var(--color-focus);
+}
+
+.kit-choice {
+  display: inline-flex;
+  gap: var(--space-0);
+}
+
+.kit-choice-option[aria-checked='true'] {
+  background: var(--color-focus);
+  color: var(--color-night-900);
+}
+
+.kit-slider {
+  width: 100%;
+  background: none;
+}
+
+.kit-slider::-webkit-slider-runnable-track {
+  height: var(--space-0);
+  background: var(--color-night-700);
+  border-radius: var(--radius-small);
+}
+
+.kit-slider::-moz-range-track {
+  height: var(--space-0);
+  background: var(--color-night-700);
+  border-radius: var(--radius-small);
+}
+
+.kit-slider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: var(--space-3);
+  height: var(--space-3);
+  margin-top: -4px;
+  background: var(--color-focus);
+  border: 0;
+  border-radius: 50%;
+}
+
+.kit-slider::-moz-range-thumb {
+  width: var(--space-3);
+  height: var(--space-3);
+  background: var(--color-focus);
+  border: 0;
+  border-radius: 50%;
+}
+
+/* Screens and heads-up pieces */
+
+.kit-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100vw;
+  height: 100vh;
+  padding: var(--space-5);
+  background: var(--color-night-900);
+  color: var(--color-mist);
+  text-align: center;
+}
+
+.kit-world {
+  width: 100vw;
+  height: 100vh;
+  background: var(--color-night-800);
+}
+
+.hud-dot {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  margin-top: -2px;
+  border-radius: 50%;
+  background: var(--color-mist);
+  pointer-events: none;
+  z-index: 90;
+}
+
+.hud-stats {
+  position: fixed;
+  top: var(--space-1);
+  left: var(--space-1);
+  padding: 3px 7px;
+  background: var(--color-night-900);
+  color: var(--color-mist);
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  border-radius: var(--radius-small);
+  pointer-events: none;
+  user-select: none;
+  z-index: 100;
+}
+
+/* The quill-ink field: a real control with hidden text over an aria-hidden ink mirror. Jitter is a transform only. */
+
+.ink-field {
+  position: relative;
+  background: var(--color-field-fill);
+  border: 1px solid var(--color-field-border);
+  border-radius: var(--radius-small);
+}
+
+.ink-control,
+.ink-mirror {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: var(--space-0) var(--space-1);
+  border: 0;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.5;
+  letter-spacing: normal;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ink-control {
+  position: relative;
+  background: none;
+  color: var(--color-field-fill);
+  caret-color: var(--color-ink);
+  resize: none;
+  overflow: hidden;
+  cursor: var(--cursor-text);
+}
+
+.ink-field-multiline .ink-control {
+  overflow-y: auto;
+}
+
+.ink-control:focus-visible {
+  outline-color: var(--color-ink);
+}
+
+.ink-mirror {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: var(--color-ink);
+  pointer-events: none;
+  user-select: none;
+}
+
+.ink-word {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.ink-char {
+  display: inline-block;
+}
+
+.ink-in {
+  animation: ink-in 160ms ease-out;
+}
+
+@keyframes ink-in {
+  from {
+    opacity: 0;
+    filter: blur(1px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+.ink-field[data-still='true'] .ink-in {
+  animation: none;
+}
+
+.ink-quill {
+  position: absolute;
+  right: var(--space-0);
+  bottom: calc(100% + var(--space-0));
+  pointer-events: none;
+  transition: transform 80ms ease-out;
+}
+
+.ink-field[data-still='true'] .ink-quill {
+  transition: none;
+}
+
+.ink-quill-feather {
+  fill: var(--color-ink-muted);
+}
+
+.ink-quill-shaft {
+  fill: none;
+  stroke: var(--color-ink);
+  stroke-width: 1.5;
+}
+
+/* The ritual page: one parchment sheet in front of the player. Pages swap by opacity only. */
+
+.ritual-layer {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 210;
+  pointer-events: none;
+}
+
+.ritual-page {
+  width: min(560px, 92vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--color-parchment);
+  color: var(--color-ink);
+  pointer-events: auto;
+}
+
+.ritual-page h2 {
+  margin: 0 0 var(--space-1);
+  font-weight: normal;
+}
+
+.ritual-page label {
+  display: block;
+  margin-bottom: var(--space-0);
+}
+
+.ritual-hint {
+  margin: var(--space-0) 0 var(--space-1);
+  color: var(--color-ink-muted);
+}
+
+.ritual-error {
+  margin: var(--space-0) 0 0;
+  color: var(--color-danger-parchment);
+}
+
+.ritual-caption {
+  margin: var(--space-2) 0 var(--space-1);
+  color: var(--color-ink-muted);
+  text-align: center;
+}
+
+.ritual-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  justify-content: space-between;
+}
+
+.ritual-sheet[data-phase='in'] {
+  animation: ritual-in 180ms ease-out;
+}
+
+.ritual-sheet[data-phase='out'] {
+  opacity: 0;
+  transition: opacity 180ms ease-in;
+  pointer-events: none;
+}
+
+.ritual-page[data-still='true'] .ritual-sheet {
+  animation: none;
+  transition: none;
+}
+
+@keyframes ritual-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* The resurrection question over the open book. */
+
+.resurrect-layer {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 220;
+  pointer-events: none;
+}
+
+.resurrect-panel {
+  width: min(480px, 92vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--color-parchment);
+  color: var(--color-ink);
+  pointer-events: auto;
+}
+
+.resurrect-panel h2 {
+  margin: 0 0 var(--space-1);
+  font-weight: normal;
+}
+
+.resurrect-label {
+  margin: var(--space-1) 0 0;
+  color: var(--color-ink-muted);
+}
+
+.resurrect-hint {
+  margin: var(--space-1) 0 0;
+  color: var(--color-ink-muted);
+}
+
+.resurrect-controls {
+  display: flex;
+  gap: var(--space-1);
+  justify-content: space-between;
+  margin-top: var(--space-2);
+}
+
+.resurrect-error {
+  margin: var(--space-0) 0 0;
+  color: var(--color-danger-parchment);
+}

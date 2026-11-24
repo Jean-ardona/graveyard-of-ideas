@@ -24,7 +24,7 @@ export function emptyData(): AppData {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     projects: [],
     seeded: false,
-    prefs: { quality: 'low', reducedMotion: false },
+    prefs: { quality: 'low', reducedMotion: false, calmMode: false, muted: false, introSeen: false },
   };
 }
 

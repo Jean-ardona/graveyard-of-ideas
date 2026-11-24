@@ -33,11 +33,22 @@ export type QualityLevel = 'low' | 'medium' | 'high';
 /** Quality levels from lightest to heaviest. */
 export const QUALITY_LEVELS: readonly QualityLevel[] = ['low', 'medium', 'high'];
 
+export interface Prefs {
+  quality: QualityLevel;
+  reducedMotion: boolean;
+  /** Calm mode: no flashes or shakes, slower motion. */
+  calmMode: boolean;
+  /** Audio is off. */
+  muted: boolean;
+  /** The entrance was already shown. */
+  introSeen: boolean;
+}
+
 export interface AppData {
   schemaVersion: number;
   projects: Project[];
   seeded: boolean;
-  prefs: { quality: QualityLevel; reducedMotion: boolean };
+  prefs: Prefs;
 }
 
 export const MAX_SLOTS = 12;

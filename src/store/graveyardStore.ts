@@ -12,7 +12,15 @@ import {
   resurrect,
   seedDemoProjects,
 } from '../domain';
-import type { AppData, ImportError, Project, QualityLevel } from '../domain';
+import type {
+  AppData,
+  BuryNewProjectResult,
+  ImportError,
+  Project,
+  ProjectCreateOptions,
+  ProjectInput,
+  QualityLevel,
+} from '../domain';
 import { loadData, saveData } from './persistence';
 import type { LoadResult, StorageError, StorageLike } from './persistence';
 
@@ -32,6 +40,12 @@ export interface GraveyardState {
   pendingImport: AppData | null;
 
   buryNewProject: (...args: DomainArgs<typeof buryNewProject>) => ReturnType<typeof buryNewProject>;
+  /**
+   * The real save of the burial ritual. Buries `input` in the slot allocated from the very list it
+   * writes to, then flushes persistence synchronously before returning. A refusal leaves the store untouched.
+   */
+  commitBurial: (input: ProjectInput, opts?: ProjectCreateOptions) => BuryNewProjectResult;
+  /** Resurrects a project and flushes persistence synchronously, like `commitBurial`. */
   resurrect: (id: string, input: Parameters<typeof resurrect>[1]) => ReturnType<typeof resurrect>;
   restAgain: (id: string) => ReturnType<typeof restAgain>;
   honor: (id: string, input: Parameters<typeof honor>[1]) => ReturnType<typeof honor>;
@@ -46,6 +60,8 @@ export interface GraveyardState {
 
   /** Changes the saved quality level. Unknown values and no-op changes are ignored. */
   setQuality: (quality: QualityLevel) => void;
+  /** Changes the saved calm mode flag. Non-boolean values and no-op changes are ignored. */
+  setCalmMode: (calmMode: boolean) => void;
 
   dismissWarning: () => void;
   setSaveError: (error: StorageError | null) => void;
@@ -89,7 +105,17 @@ export function createGraveyardStore(storage: StorageLike | null): GraveyardStor
       pendingImport: null,
 
       buryNewProject: (input, opts) => commit(buryNewProject(input, get().data.projects, opts)),
-      resurrect: (id, input) => commit(resurrect(id, input, get().data.projects)),
+      commitBurial: (input, opts) => {
+        const result = commit(buryNewProject(input, get().data.projects, opts));
+        if (result.ok) set({ saveError: saveData(storage, get().data) });
+        return result;
+      },
+      resurrect: (id, input) => {
+        const result = commit(resurrect(id, input, get().data.projects));
+        // Saved before the sequence plays, so a reload or a closed tab mid-sequence keeps the final state.
+        if (result.ok) set({ saveError: saveData(storage, get().data) });
+        return result;
+      },
       restAgain: (id) => commit(restAgain(id, get().data.projects)),
       honor: (id, input) => commit(honor(id, input, get().data.projects)),
       remove: (id) => commit(remove(id, get().data.projects)),
@@ -123,6 +149,12 @@ export function createGraveyardStore(storage: StorageLike | null): GraveyardStor
         const { data } = get();
         if (!QUALITY_LEVELS.includes(quality) || data.prefs.quality === quality) return;
         set({ data: { ...data, prefs: { ...data.prefs, quality } } });
+      },
+
+      setCalmMode: (calmMode) => {
+        const { data } = get();
+        if (typeof calmMode !== 'boolean' || data.prefs.calmMode === calmMode) return;
+        set({ data: { ...data, prefs: { ...data.prefs, calmMode } } });
       },
 
       dismissWarning: () => set({ warning: null }),

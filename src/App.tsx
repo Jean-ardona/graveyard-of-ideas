@@ -9,6 +9,10 @@ import {
   useReadingInput,
   useReadingPhase,
 } from './book';
+import BurialDriver from './cinematics/BurialDriver';
+import ResurrectionDriver from './cinematics/ResurrectionDriver';
+import { useResurrecting } from './cinematics/resurrectionSession';
+import { attachRitualSession, useRitualNotice, useRitualPhase } from './interaction/ritualSession';
 import { appStore, useAppStore } from './store/appStore';
 import NightScene from './world/NightScene';
 import { nextQuality, qualityLabel, resolvePreset } from './world/quality';
@@ -20,6 +24,9 @@ import ControlsHint from './ui/ControlsHint';
 import PointerHud from './ui/PointerHud';
 import InteractionPrompt from './ui/InteractionPrompt';
 import { useDemoProjectsKey } from './ui/useDemoProjectsKey';
+import { COPY, qualityLowered } from './ui/copy';
+import { Button } from './ui/kit';
+import RitualOverlay from './ui/ritual/RitualOverlay';
 
 /** Returns true if the browser can create a WebGL context. */
 function isWebGLAvailable(): boolean {
@@ -33,22 +40,6 @@ function isWebGLAvailable(): boolean {
     return false;
   }
 }
-
-const FALLBACK_STYLE: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  flexDirection: 'column',
-  gap: '12px',
-  width: '100vw',
-  height: '100vh',
-  background: '#0d1117',
-  color: '#c8d8ff',
-  fontFamily: 'serif',
-  fontSize: '1.1rem',
-  textAlign: 'center',
-  padding: '2rem',
-};
 
 const NOTICE_MS = 5000;
 
@@ -64,7 +55,12 @@ export default function App() {
   const reducedMotion = useAppStore((state) => state.data.prefs.reducedMotion);
   const preset = useMemo(() => resolvePreset(quality, reducedMotion), [quality, reducedMotion]);
 
-  const inputLocked = useReadingPhase() !== 'closed';
+  const ritualPhase = useRitualPhase();
+  const ritualNotice = useRitualNotice();
+  const resurrecting = useResurrecting();
+  const inputLocked = useReadingPhase() !== 'closed' || ritualPhase !== 'idle' || resurrecting;
+
+  useEffect(() => attachRitualSession(), []);
 
   const hasRestingProject = useAppStore((state) =>
     state.data.projects.some((project) => project.status === 'resting'),
@@ -85,7 +81,7 @@ export default function App() {
 
   const lowerQualityAutomatically = useCallback((lighter: QualityLevel) => {
     appStore.getState().setQuality(lighter);
-    setNotice(`Quality lowered to ${qualityLabel(lighter)} to keep the night smooth.`);
+    setNotice(qualityLowered(qualityLabel(lighter)));
     if (noticeTimer.current !== null) clearTimeout(noticeTimer.current);
     noticeTimer.current = setTimeout(() => setNotice(null), NOTICE_MS);
   }, []);
@@ -110,46 +106,25 @@ export default function App() {
 
   if (!webglOk) {
     return (
-      <div style={FALLBACK_STYLE}>
-        <p>WebGL is not available in this browser.</p>
-        <p style={{ fontSize: '0.9rem', color: '#8899aa' }}>
-          Try enabling hardware acceleration in your browser settings, or use a
-          different browser. All project data is still accessible below.
-        </p>
+      <div className="kit-screen">
+        <p>{COPY.screens.noWebgl}</p>
+        <p>{COPY.screens.noWebglHelp}</p>
       </div>
     );
   }
 
   if (contextLost) {
     return (
-      <div style={FALLBACK_STYLE}>
-        <p>The WebGL context was lost.</p>
-        <p style={{ fontSize: '0.9rem', color: '#8899aa' }}>
-          This can happen if the GPU driver reset or the tab was backgrounded
-          too long. Reload the page to restore the scene.
-        </p>
-        <button
-          onClick={() => window.location.reload()}
-          style={{
-            marginTop: '8px',
-            padding: '8px 20px',
-            background: 'transparent',
-            border: '1px solid #c8d8ff',
-            color: '#c8d8ff',
-            fontFamily: 'serif',
-            fontSize: '1rem',
-            cursor: 'pointer',
-            borderRadius: '4px',
-          }}
-        >
-          Reload
-        </button>
+      <div className="kit-screen">
+        <p>{COPY.screens.contextLost}</p>
+        <p>{COPY.screens.contextLostHelp}</p>
+        <Button onClick={() => window.location.reload()}>{COPY.screens.reload}</Button>
       </div>
     );
   }
 
   return (
-    <div style={{ width: '100vw', height: '100vh', background: '#1a2238' }}>
+    <div className="kit-world">
       <div style={{ width: '100%', height: '100%' }}>
         {/* Antialiasing is fixed when a WebGL context is created, so the canvas is recreated when it changes. */}
         <Canvas
@@ -163,15 +138,18 @@ export default function App() {
         >
           <NightScene preset={preset} quality={quality} inputLocked={inputLocked} />
           <BookSequenceDriver />
+          <BurialDriver />
+          <ResurrectionDriver />
           <FpsTracker statsRef={statsRef} quality={quality} onAutoLower={lowerQualityAutomatically} />
         </Canvas>
       </div>
       <FpsCounter statsRef={statsRef} quality={quality} onCycleQuality={cycleQuality} />
-      <QualityNotice message={notice} />
+      <QualityNotice message={ritualNotice ?? notice} />
       <PointerHud />
       <InteractionPrompt inputLocked={inputLocked} />
       <ControlsHint />
       <BookReader />
+      <RitualOverlay />
     </div>
   );
 }

@@ -1,7 +1,9 @@
 import { createStore } from 'zustand/vanilla';
 import { useStore } from 'zustand';
+import { currentUiMode } from '../cinematics/resurrectionSession';
 import type { Project } from '../domain';
 import { allowsMovement, getPointerMode } from '../interaction/pointerLock';
+import { ritualMachine } from '../interaction/ritualMachine';
 import { canOpenBook } from '../interaction/uiMode';
 import { appStore, useAppStore } from '../store/appStore';
 import type { TurnDirection } from './pageTurn';
@@ -27,7 +29,8 @@ function skipWhenReducedMotion(): void {
 export function openBook(projectId: string, playerInFront: boolean): void {
   const guard = {
     playerInFront,
-    mode: readingMachine.uiMode(),
+    ritualPhase: ritualMachine.phase(),
+    mode: currentUiMode(),
     pointerAllowsMovement: allowsMovement(getPointerMode()),
     projectResting: appStore.getState().data.projects.some((p) => p.id === projectId && p.status === 'resting'),
   };

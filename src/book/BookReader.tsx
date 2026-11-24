@@ -1,3 +1,5 @@
+import type { ResurrectInput } from '../domain';
+import { startResurrection } from '../cinematics/resurrectionSession';
 import BookPageOverlay from './BookPageOverlay';
 import { useReadingProject } from './readingBook';
 import { useReadingPhase } from './useReadingPhase';
@@ -6,5 +8,10 @@ import { useReadingPhase } from './useReadingPhase';
 export default function BookReader() {
   const project = useReadingProject();
   const phase = useReadingPhase();
-  return project && phase === 'open' ? <BookPageOverlay key={project.id} project={project} /> : null;
+  if (!project || phase !== 'open') return null;
+  // The session saves status Resurrected first, then the embers and specter sequence represents it.
+  const resurrect = (input: ResurrectInput): void => {
+    startResurrection(project.id, input);
+  };
+  return <BookPageOverlay key={project.id} project={project} onResurrect={resurrect} />;
 }

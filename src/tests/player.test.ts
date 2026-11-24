@@ -1,4 +1,26 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createElement } from 'react';
+import { cleanup, render } from '@testing-library/react';
+import * as THREE from 'three';
+
+const rig = vi.hoisted(() => ({
+  frame: null as ((state: unknown, delta: number) => void) | null,
+  camera: null as unknown,
+  canvas: null as unknown,
+}));
+
+vi.mock('@react-three/fiber', () => ({
+  useFrame: (callback: (state: unknown, delta: number) => void) => {
+    rig.frame = callback;
+  },
+  useThree: (selector: (state: { camera: unknown; gl: { domElement: unknown } }) => unknown) =>
+    selector({ camera: rig.camera, gl: { domElement: rig.canvas } }),
+}));
+
+import PlayerController from '../interaction/PlayerController';
+import { claimCamera, releaseCamera } from '../interaction/cameraOverride';
+import { playerSession } from '../interaction/playerSession';
+import { terrainHeight } from '../world/terrain';
 import { resolveCollisions } from '../interaction/collision';
 import { MAX_LOOK_DELTA, MAX_PITCH, applyLook } from '../interaction/playerLook';
 import {
@@ -31,6 +53,7 @@ import {
 import type { StorageLike } from '../store/persistence';
 import {
   COLLIDERS,
+  EYE_HEIGHT,
   GATE_POSITION,
   GRAVE_SLOTS,
   TOMB_HALF_DEPTH,
@@ -350,5 +373,68 @@ describe('refused pointer request after a deliberate release', () => {
     requestPointer();
     expect(getPointerMode()).toBe('lost');
     detach();
+  });
+});
+
+describe('camera override in the player controller', () => {
+  afterEach(() => {
+    cleanup();
+    releaseCamera();
+    rig.frame = null;
+  });
+
+  function mount(): THREE.PerspectiveCamera {
+    const camera = new THREE.PerspectiveCamera();
+    rig.camera = camera;
+    rig.canvas = document.createElement('canvas');
+    render(createElement(PlayerController));
+    return camera;
+  }
+
+  function frame(): void {
+    if (!rig.frame) throw new Error('the controller did not register a frame callback');
+    rig.frame({}, 0.016);
+  }
+
+  it('writes the camera from the player pose when the camera is not claimed', () => {
+    const camera = mount();
+    frame();
+    expect(camera.position.x).toBeCloseTo(playerSession.x);
+    expect(camera.position.z).toBeCloseTo(playerSession.z);
+    expect(camera.position.y).toBeCloseTo(terrainHeight(playerSession.x, playerSession.z) + EYE_HEIGHT);
+    expect(camera.rotation.y).toBeCloseTo(playerSession.yaw);
+    expect(camera.rotation.x).toBeCloseTo(playerSession.pitch);
+  });
+
+  it('writes neither camera position nor rotation, and keeps its own pose, while claimed', () => {
+    const camera = mount();
+    frame();
+    const before = { x: playerSession.x, z: playerSession.z, yaw: playerSession.yaw, pitch: playerSession.pitch };
+    camera.position.set(7, 8, 9);
+    camera.rotation.set(0.3, 0.4, 0);
+    claimCamera();
+    frame();
+    frame();
+    expect(camera.position.toArray()).toEqual([7, 8, 9]);
+    expect(camera.rotation.x).toBeCloseTo(0.3);
+    expect(camera.rotation.y).toBeCloseTo(0.4);
+    expect({ x: playerSession.x, z: playerSession.z, yaw: playerSession.yaw, pitch: playerSession.pitch }).toEqual(before);
+  });
+
+  it('shows the player pose again on the first frame after the release', () => {
+    const camera = mount();
+    frame();
+    const pose = { x: playerSession.x, z: playerSession.z, yaw: playerSession.yaw, pitch: playerSession.pitch };
+    camera.position.set(7, 8, 9);
+    camera.rotation.set(0.3, 0.4, 0);
+    claimCamera();
+    frame();
+    releaseCamera();
+    frame();
+    expect(camera.position.x).toBeCloseTo(pose.x);
+    expect(camera.position.z).toBeCloseTo(pose.z);
+    expect(camera.position.y).toBeCloseTo(terrainHeight(pose.x, pose.z) + EYE_HEIGHT);
+    expect(camera.rotation.y).toBeCloseTo(pose.yaw);
+    expect(camera.rotation.x).toBeCloseTo(pose.pitch);
   });
 });

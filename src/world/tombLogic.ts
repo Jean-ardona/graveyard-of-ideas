@@ -1,5 +1,6 @@
 import { MAX_SLOTS } from '../domain/types';
 import type { Project } from '../domain/types';
+import { openPrompt } from '../ui/copy';
 import { GRAVE_SLOTS, TOMB_HALF_DEPTH, TOMB_HALF_WIDTH } from './config';
 import type { BoxCollider } from './config';
 
@@ -71,7 +72,7 @@ export function toTombDescriptor(project: Project): TombDescriptor | null {
     z: place.z,
     rotation: place.rotation,
     lean: shape === 'worn' ? WORN_LEAN : 0,
-    label: `Open ${title}`,
+    label: openPrompt(title),
   };
 }
 
@@ -83,6 +84,20 @@ export function toTombDescriptors(projects: readonly Project[]): TombDescriptor[
     if (descriptor && !bySlot.has(descriptor.slot)) bySlot.set(descriptor.slot, descriptor);
   }
   return [...bySlot.values()].sort((a, b) => a.slot - b.slot);
+}
+
+/**
+ * Adds the tombs kept alive for a running cinematic to the tombs of the resting projects, ordered by slot.
+ * A held tomb whose id or slot is already drawn is skipped, so nothing is drawn twice.
+ */
+export function withHeldTombs(
+  descriptors: readonly TombDescriptor[],
+  held: readonly TombDescriptor[],
+): TombDescriptor[] {
+  const extra = held.filter(
+    (tomb) => !descriptors.some((drawn) => drawn.id === tomb.id || drawn.slot === tomb.slot),
+  );
+  return [...descriptors, ...extra].sort((a, b) => a.slot - b.slot);
 }
 
 /** True when a tomb built from `a` would look and behave exactly like one built from `b`. */

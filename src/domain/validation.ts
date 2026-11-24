@@ -1,5 +1,5 @@
 import { MAX_SLOTS, QUALITY_LEVELS } from './types';
-import type { AppData, HistoryEntry, Project, Status } from './types';
+import type { AppData, HistoryEntry, Prefs, Project, Status } from './types';
 import { CURRENT_SCHEMA_VERSION, LIMITS } from './schema';
 import { isSafeLink } from './links';
 
@@ -132,11 +132,14 @@ function hasUniqueValues(values: unknown[]): boolean {
   return new Set(values).size === values.length;
 }
 
-function parsePrefs(raw: unknown): Checked<AppData['prefs']> {
+function parsePrefs(raw: unknown): Checked<Prefs> {
   if (!isRecord(raw)) return INVALID;
   const quality = oneOf(raw.quality, QUALITY_LEVELS);
-  if (quality === INVALID || typeof raw.reducedMotion !== 'boolean') return INVALID;
-  return { quality, reducedMotion: raw.reducedMotion };
+  const { reducedMotion, calmMode, muted, introSeen } = raw;
+  if (quality === INVALID) return INVALID;
+  if (typeof reducedMotion !== 'boolean' || typeof calmMode !== 'boolean') return INVALID;
+  if (typeof muted !== 'boolean' || typeof introSeen !== 'boolean') return INVALID;
+  return { quality, reducedMotion, calmMode, muted, introSeen };
 }
 
 /**

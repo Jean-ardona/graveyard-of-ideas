@@ -7,6 +7,8 @@ import InteractionController from '../interaction/InteractionController';
 import DeadTrees from './DeadTrees';
 import Gate from './Gate';
 import Hut from './Hut';
+import Lectern from './Lectern';
+import Quill from './Quill';
 import Mist from './Mist';
 import Moon from './Moon';
 import Paths from './Paths';
@@ -62,6 +64,8 @@ export default function NightScene({
       <Tombs />
       <Gate />
       <Hut />
+      <Lectern />
+      <Quill />
     </>
   );
 }

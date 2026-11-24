@@ -1,4 +1,5 @@
-import { memo, useEffect, useMemo } from 'react';
+import { memo, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { isRevealPending, subscribeRevealPending } from '../interaction/revealPending';
 import type { BookAssets } from './bookAssets';
 import { registerBookHandle } from './bookHandles';
 import { applyRestPose, createBookModel } from './bookModel';
@@ -26,7 +27,14 @@ function Book({ id, assets }: BookProps) {
     [id, model],
   );
 
-  return <primitive object={model.root} />;
+  // A freshly buried book stays hidden until the burial cinematic reveals it (UI-only flag, never saved).
+  const hidden = useSyncExternalStore(
+    subscribeRevealPending,
+    () => isRevealPending(id),
+    () => isRevealPending(id),
+  );
+
+  return <primitive object={model.root} visible={!hidden} />;
 }
 
 export default memo(Book);

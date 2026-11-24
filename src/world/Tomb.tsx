@@ -18,6 +18,7 @@ import { registerTombHandle } from './tombHandles';
 import { sameTomb, slabOffset, tombCollider } from './tombLogic';
 import type { TombDescriptor } from './tombLogic';
 
+const noop = (): void => undefined;
 const PROMPT_HEIGHT = 0.9;
 /** The prompt point is this far in front of the tomb center: the middle of the resting book. */
 const PROMPT_FRONT = PLINTH.bookZ - BOOK_REST_FOOTPRINT.length / 2;
@@ -29,6 +30,8 @@ interface TombProps {
   descriptor: TombDescriptor;
   assets: TombAssets;
   bookAssets: BookAssets;
+  /** The tomb is kept only for a running resurrection: it keeps its body and collider but offers no prompt. */
+  retiring: boolean;
 }
 
 /**
@@ -36,7 +39,7 @@ interface TombProps {
  * book lying on it, and the name engraved on its face. Geometry and materials (stone and book) are shared;
  * only the name texture and its material belong to this tomb and are disposed with it.
  */
-function Tomb({ descriptor, assets, bookAssets }: TombProps) {
+function Tomb({ descriptor, assets, bookAssets, retiring }: TombProps) {
   const { id, title, label, x, z, rotation, lean, shape } = descriptor;
   const slabRef = useRef<THREE.Mesh>(null);
   const openProgress = useRef(0);
@@ -52,23 +55,25 @@ function Tomb({ descriptor, assets, bookAssets }: TombProps) {
     const action = `open-tomb:${id}`;
     // The tomb faces local +z, which is (sin, cos) of its rotation on the ground.
     const tomb = { x, z, facing: { x: Math.sin(rotation), z: Math.cos(rotation) } };
-    const removeInteractable = registerInteractable({
-      tomb,
-      id: `tomb-${id}`,
-      position: {
-        x: x + Math.sin(rotation) * PROMPT_FRONT,
-        y: y + PROMPT_HEIGHT,
-        z: z + Math.cos(rotation) * PROMPT_FRONT,
-      },
-      radius: REACH,
-      label,
-      action,
-      enabled: true,
-    });
+    const removeInteractable = retiring
+      ? noop
+      : registerInteractable({
+          tomb,
+          id: `tomb-${id}`,
+          position: {
+            x: x + Math.sin(rotation) * PROMPT_FRONT,
+            y: y + PROMPT_HEIGHT,
+            z: z + Math.cos(rotation) * PROMPT_FRONT,
+          },
+          radius: REACH,
+          label,
+          action,
+          enabled: true,
+        });
     // E starts the book sequence: the book lifts, comes to the player and opens.
-    const removeHandler = registerActionHandler(action, () =>
-      openBook(id, isInFrontOfTomb(tomb, tomb.facing, playerSession)),
-    );
+    const removeHandler = retiring
+      ? noop
+      : registerActionHandler(action, () => openBook(id, isInFrontOfTomb(tomb, tomb.facing, playerSession)));
     const removeCollider = registerCollider(tombCollider(descriptor, PLINTH.backZ + PLINTH.depth));
     const removeHandle = registerTombHandle({
       id,
@@ -86,7 +91,7 @@ function Tomb({ descriptor, assets, bookAssets }: TombProps) {
       removeHandle();
     };
     // The descriptor is fully described by the fields below.
-  }, [id, title, label, x, z, rotation, y]);
+  }, [id, title, label, x, z, rotation, y, retiring]);
 
   return (
     <group position={[x, y, z]} rotation={[0, rotation, 0]}>
@@ -103,4 +108,7 @@ function Tomb({ descriptor, assets, bookAssets }: TombProps) {
   );
 }
 
-export default memo(Tomb, (previous, next) => sameTomb(previous.descriptor, next.descriptor));
+export default memo(
+  Tomb,
+  (previous, next) => sameTomb(previous.descriptor, next.descriptor) && previous.retiring === next.retiring,
+);

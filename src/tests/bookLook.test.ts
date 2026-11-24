@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { BOOK_LOOK, coverBorderPixels, createCoverBorderTexture } from '../book/bookLook';
+import { TOKENS } from '../ui/theme/tokens';
 import { COLORS } from '../world/config';
 
 /** Relative luminance of a hex color (linear sRGB, Rec. 709 weights). */
@@ -56,14 +57,14 @@ describe('bookLook colors', () => {
   });
 
   it('keeps the leaf colors as specified', () => {
-    expect(LEAF_COLORS).toEqual(['#c3ccdb', '#141c30', '#3a4766', '#dde3ee', '#5a6a84', '#1d2740', '#c8d8ff', '#3b4d73']);
+    expect(LEAF_COLORS).toEqual(Object.values(TOKENS.leaf));
   });
 
-  it('reads at least 7:1 for ink on paper and on a field, and for the button text', () => {
+  it('reads at least 7:1 for ink on paper and on a field, for the muted ink and for the button text', () => {
     expect(contrast(BOOK_LOOK.leafInk, BOOK_LOOK.leafPaper)).toBeGreaterThanOrEqual(7);
     expect(contrast(BOOK_LOOK.leafInk, BOOK_LOOK.fieldFill)).toBeGreaterThanOrEqual(7);
     expect(contrast(BOOK_LOOK.buttonText, BOOK_LOOK.buttonFill)).toBeGreaterThanOrEqual(7);
-    expect(contrast(BOOK_LOOK.leafMuted, BOOK_LOOK.leafPaper)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(BOOK_LOOK.leafMuted, BOOK_LOOK.leafPaper)).toBeGreaterThanOrEqual(7);
   });
 
   it('keeps the rim low', () => {

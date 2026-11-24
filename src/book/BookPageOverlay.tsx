@@ -1,7 +1,9 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { AnimationEvent, CSSProperties, TransitionEvent } from 'react';
-import type { Project } from '../domain';
+import type { Project, ResurrectInput } from '../domain';
 import { useAppStore } from '../store/appStore';
+import { COPY, errorMessage } from '../ui/copy';
+import { Button } from '../ui/kit';
 import { BOOK_BODY_STACK, BOOK_FONT_STACK } from './bookFonts';
 import { BOOK_LOOK } from './bookLook';
 import { layoutPages } from './bookPageLayout';
@@ -13,6 +15,8 @@ import { mirrorPageRect, usePageRect } from './pageRect';
 import type { PageRect } from './pageRect';
 import { END_INDEX, PAGE_COUNT, zoneAction } from './pageTurn';
 import { closeBook } from './readingBook';
+import ResurrectConfirm from './ResurrectConfirm';
+import { checkResurrectRequest } from './resurrectRequest';
 import { usePageTurnView } from './useReadingPhase';
 import { usePageDrag } from './useReadingInput';
 
@@ -102,8 +106,8 @@ function leftRectStyle(rect: PageRect | null): CSSProperties {
 
 interface BookPageOverlayProps {
   project: Project;
-  /** Starts the resurrection. Without one the button stays disabled (task 7 supplies it). */
-  onResurrect?: () => void;
+  /** Called once the user confirms the resurrection, with the validated next action. Without one the button stays disabled. */
+  onResurrect?: (input: ResurrectInput) => void;
 }
 
 /**
@@ -121,6 +125,16 @@ export default function BookPageOverlay({ project, onResurrect }: BookPageOverla
   const fadeSeconds = crossfadeSeconds(reducedMotion);
   const rightDrag = usePageDrag(() => surface.current?.getBoundingClientRect().width ?? 0, 'right');
   const leftDrag = usePageDrag(() => leftSurface.current?.getBoundingClientRect().width ?? 0, 'left');
+  const [asked, setAsked] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const request = checkResurrectRequest(project);
+  // The "needed" message disappears as soon as a next action is saved; the confirm view follows the saved text.
+  const needsNextAction = asked && !request.ok;
+  const showConfirm = confirming && request.ok;
+  const pressResurrect = (): void => {
+    setAsked(true);
+    setConfirming(request.ok);
+  };
 
   const pages = layoutPages(project, onResurrect !== undefined);
   // In the end position the last page stays the one shown in the indicator, but no content is drawn.
@@ -189,9 +203,14 @@ export default function BookPageOverlay({ project, onResurrect }: BookPageOverla
             />
           ))}
           {page.resurrectButton !== undefined && (
-            <button disabled={page.resurrectButton.disabled} onClick={onResurrect} style={buttonStyle(pageWidth)}>
+            <Button disabled={page.resurrectButton.disabled} onClick={pressResurrect} style={buttonStyle(pageWidth)}>
               {page.resurrectButton.label}
-            </button>
+            </Button>
+          )}
+          {page.resurrectButton !== undefined && needsNextAction && (
+            <p className="resurrect-error" role="alert" data-testid="resurrect-needs-action">
+              {errorMessage('invalid_next_action')}
+            </p>
           )}
           <p
             style={{
@@ -205,13 +224,23 @@ export default function BookPageOverlay({ project, onResurrect }: BookPageOverla
           </p>
         </div>
       </div>
-      <button
+      <Button
         onClick={closeBook}
         data-testid="book-close-button"
         style={{ ...CLOSE_STYLE, opacity: backDrag ? 0 : 1, pointerEvents: backDrag ? 'none' : 'auto' }}
       >
-        Close the book
-      </button>
+        {COPY.book.close}
+      </Button>
+      {showConfirm && request.ok && (
+        <ResurrectConfirm
+          request={request}
+          onBack={() => setConfirming(false)}
+          onConfirm={() => {
+            setConfirming(false);
+            onResurrect?.(request.input);
+          }}
+        />
+      )}
     </section>
   );
 }

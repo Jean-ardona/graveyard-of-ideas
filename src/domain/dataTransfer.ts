@@ -14,7 +14,16 @@ export type ImportResult = { ok: true; data: AppData } | { ok: false; error: Imp
 type Migration = (raw: Record<string, unknown>) => Record<string, unknown>;
 
 /** Migration hook: MIGRATIONS.get(n) upgrades a version n payload to version n + 1. */
-const MIGRATIONS = new Map<number, Migration>();
+const MIGRATIONS = new Map<number, Migration>([
+  [
+    // Version 2 adds calmMode, muted and introSeen. An old graveyard has had its intro: introSeen = seeded.
+    1,
+    (raw) => {
+      if (!isRecord(raw.prefs)) return raw;
+      return { ...raw, prefs: { ...raw.prefs, calmMode: false, muted: false, introSeen: raw.seeded } };
+    },
+  ],
+]);
 
 /** Serializes the data as versioned JSON. Does not mutate its input. */
 export function exportData(data: AppData, now: string = new Date().toISOString()): string {

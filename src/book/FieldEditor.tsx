@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { maxLengthOf } from '../domain';
 import { appStore } from '../store/appStore';
+import { COPY } from '../ui/copy';
+import { Field } from '../ui/kit';
 import { BOOK_BODY_STACK } from './bookFonts';
 import { BOOK_LOOK } from './bookLook';
 import type { PageField } from './bookPageLayout';
 import { PAGE_METRICS, PAGE_REFERENCE_WIDTH_PX } from './leafFaces';
-
-const DESCRIPTION_ERROR = 'The first page cannot be left empty. Your last saved words are kept.';
 
 export type FieldSpec = Pick<PageField, 'field' | 'label' | 'multiline'>;
 
@@ -29,21 +29,21 @@ export default function FieldEditor({ projectId, spec, saved, pageWidth = PAGE_R
   function change(value: string): void {
     setText(value);
     const result = appStore.getState().editProject(projectId, { [spec.field]: value });
-    setError(result.ok ? null : DESCRIPTION_ERROR);
+    setError(result.ok ? null : COPY.book.descriptionEmpty);
   }
 
-  const Input = spec.multiline ? 'textarea' : 'input';
   return (
     <div style={{ marginBottom: size(m.fieldGap) }}>
       <label htmlFor={id} style={{ display: 'block', marginBottom: size(m.labelGap) }}>
         {spec.label}
       </label>
-      <Input
+      <Field
         id={id}
         value={text}
         maxLength={maxLengthOf(spec.field)}
+        multiline={spec.multiline}
         rows={spec.multiline ? m.multilineRows : undefined}
-        onChange={(event) => change(event.target.value)}
+        onValueChange={change}
         style={{
           width: '100%',
           boxSizing: 'border-box',

@@ -1,3 +1,4 @@
+import { pageCaptionText } from '../ui/copy';
 import { layoutPages } from './bookPageLayout';
 import type { PageDescriptor, PageProject } from './bookPageLayout';
 import { PAGE_COUNT } from './pageTurn';
@@ -78,7 +79,7 @@ const ELLIPSIS = '…';
 
 /** The caption under a page: "Page 2 of 3". */
 export function pageCaption(pageIndex: number): string {
-  return `Page ${pageIndex + 1} of ${PAGE_COUNT}`;
+  return pageCaptionText(pageIndex + 1, PAGE_COUNT);
 }
 
 /** Greedy word wrap. A paragraph break starts a new line, and a word wider than the line breaks by character. */

@@ -1,5 +1,5 @@
 /** Version written by exportData and required (after migration) by importData. */
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 /** Largest accepted import payload, in characters (about 5 MB of text). */
 export const MAX_IMPORT_CHARS = 5 * 1024 * 1024;

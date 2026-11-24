@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import * as THREE from 'three';
 import { registerActionHandler, registerInteractable } from '../interaction';
+import { COPY } from '../ui/copy';
 import { COLORS, HUT_POSITION } from './config';
 import { createGlowTexture } from './glowTexture';
 import { useDisposable } from './geometryUtils';
@@ -26,7 +27,7 @@ export default function Hut() {
       id: 'hut-door',
       position: { x: HUT_POSITION.x + DOOR_X, y: y + DOOR_HEIGHT, z: HUT_POSITION.z + DEPTH / 2 },
       radius: DOOR_REACH,
-      label: "Enter the keeper's hut",
+      label: COPY.prompts.enterHut,
       action: ENTER_ACTION,
       enabled: true,
     });

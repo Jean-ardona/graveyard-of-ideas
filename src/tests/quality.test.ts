@@ -147,7 +147,7 @@ describe('quality preference persistence', () => {
     const storage = new MemoryStorage();
     storage.items.set(
       STORAGE_KEY,
-      exportData({ ...emptyData(), seeded: true, prefs: { quality, reducedMotion: false } }),
+      exportData({ ...emptyData(), seeded: true, prefs: { ...emptyData().prefs, quality } }),
     );
     return storage;
   }
@@ -164,7 +164,7 @@ describe('quality preference persistence', () => {
     const storage = storageWith('low');
     const store = createGraveyardStore(storage);
     store.getState().setQuality('medium');
-    expect(store.getState().data.prefs).toEqual({ quality: 'medium', reducedMotion: false });
+    expect(store.getState().data.prefs).toEqual({ ...emptyData().prefs, quality: 'medium' });
     storage.items.set(STORAGE_KEY, store.getState().exportJson());
     expect(createGraveyardStore(storage).getState().data.prefs.quality).toBe('medium');
   });
@@ -174,6 +174,24 @@ describe('quality preference persistence', () => {
     const before = store.getState().data;
     store.getState().setQuality('ultra' as QualityLevel);
     store.getState().setQuality('low');
+    expect(store.getState().data).toBe(before);
+  });
+
+  it('setCalmMode saves calm mode, keeps the other prefs and survives a reload', () => {
+    const storage = storageWith('medium');
+    const store = createGraveyardStore(storage);
+    expect(store.getState().data.prefs.calmMode).toBe(false);
+    store.getState().setCalmMode(true);
+    expect(store.getState().data.prefs).toEqual({ ...emptyData().prefs, quality: 'medium', calmMode: true });
+    storage.items.set(STORAGE_KEY, store.getState().exportJson());
+    expect(createGraveyardStore(storage).getState().data.prefs.calmMode).toBe(true);
+  });
+
+  it('ignores an unchanged or non-boolean calm mode', () => {
+    const store = createGraveyardStore(storageWith('low'));
+    const before = store.getState().data;
+    store.getState().setCalmMode(false);
+    store.getState().setCalmMode('yes' as unknown as boolean);
     expect(store.getState().data).toBe(before);
   });
 });

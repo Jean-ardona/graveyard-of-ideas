@@ -15,6 +15,9 @@ const SOURCES = import.meta.glob<string>(
     '../book/leafFaces.ts',
     '../book/pageCrossfade.ts',
     '../interaction/uiMode.ts',
+    '../domain/ritualSteps.ts',
+    '../interaction/ritualMachine.ts',
+    '../interaction/ritualKeys.ts',
   ],
   { query: '?raw', import: 'default', eager: true },
 );
@@ -29,8 +32,8 @@ function withoutComments(source: string): string {
 }
 
 describe('pure book core', () => {
-  it('scans all twelve modules', () => {
-    expect(Object.keys(SOURCES)).toHaveLength(12);
+  it('scans all fifteen modules', () => {
+    expect(Object.keys(SOURCES)).toHaveLength(15);
   });
 
   it.each(Object.entries(SOURCES))('%s imports no React or Three.js and uses no DOM or timers', (_file, source) => {

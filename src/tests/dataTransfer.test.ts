@@ -16,6 +16,14 @@ import type { AppData, Project } from '../domain';
 
 const NOW = '2026-11-14T12:00:00.000Z';
 
+const DEFAULT_PREFS: AppData['prefs'] = {
+  quality: 'low',
+  reducedMotion: false,
+  calmMode: false,
+  muted: false,
+  introSeen: true,
+};
+
 function sampleData(count = 3): AppData {
   let projects: Project[] = [];
   for (let i = 0; i < count; i++) {
@@ -25,7 +33,7 @@ function sampleData(count = 3): AppData {
     });
     if (r.ok) projects = r.projects;
   }
-  return { schemaVersion: CURRENT_SCHEMA_VERSION, projects, seeded: true, prefs: { quality: 'low', reducedMotion: false } };
+  return { schemaVersion: CURRENT_SCHEMA_VERSION, projects, seeded: true, prefs: DEFAULT_PREFS };
 }
 
 /** Exports sample data, lets the caller corrupt the parsed payload, and re-serializes it. */
@@ -89,6 +97,10 @@ describe('importData', () => {
       (p) => (p.seeded = 'yes'),
       (p) => (p.prefs.quality = 'ultra'),
       (p) => (p.prefs.reducedMotion = 1),
+      (p) => (p.prefs.calmMode = 'no'),
+      (p) => (p.prefs.muted = 0),
+      (p) => (p.prefs.introSeen = null),
+      (p) => delete p.prefs.calmMode,
       (p) => (p.projects = {}),
     ];
     for (const mutate of cases) {
@@ -247,9 +259,9 @@ const appDataArb: fc.Arbitrary<AppData> = fc
     slotOrderArb,
     fc.boolean(),
     fc.constantFrom<AppData['prefs']['quality']>('low', 'medium', 'high'),
-    fc.boolean(),
+    fc.tuple(fc.boolean(), fc.boolean(), fc.boolean(), fc.boolean()),
   )
-  .map(([bases, slots, seeded, quality, reducedMotion]) => {
+  .map(([bases, slots, seeded, quality, [reducedMotion, calmMode, muted, introSeen]]) => {
     let nextSlot = 0;
     const projects = bases.map((base, i) => {
       const resting = base.status === 'resting' && nextSlot < MAX_SLOTS;
@@ -257,7 +269,12 @@ const appDataArb: fc.Arbitrary<AppData> = fc
       if (resting) project.slot = slots[nextSlot++];
       return project;
     });
-    return { schemaVersion: CURRENT_SCHEMA_VERSION, projects, seeded, prefs: { quality, reducedMotion } };
+    return {
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      projects,
+      seeded,
+      prefs: { quality, reducedMotion, calmMode, muted, introSeen },
+    };
   });
 
 describe('properties', () => {
@@ -341,10 +358,43 @@ describe('properties', () => {
           schemaVersion: CURRENT_SCHEMA_VERSION,
           projects,
           seeded: true,
-          prefs: { quality: 'low', reducedMotion: false },
+          prefs: DEFAULT_PREFS,
         };
         expect(importData(exportData(data))).toEqual({ ok: true, data });
       }),
+    );
+  });
+
+  /**
+   * Feature: graveyard-core, Property 56: Preferences migrate and round trip
+   * **Validates: Requirements 12.1, 13.1**
+   */
+  it('Feature: graveyard-core, Property 56: Preferences migrate and round trip', () => {
+    fc.assert(
+      fc.property(appDataArb, (data) => {
+        // Round trip of the current schema, new prefs included.
+        expect(importData(exportData(data))).toEqual({ ok: true, data });
+
+        // A version 1 payload: no new prefs, a version number of 1.
+        const old = JSON.parse(exportData(data));
+        old.schemaVersion = 1;
+        old.prefs = { quality: data.prefs.quality, reducedMotion: data.prefs.reducedMotion };
+        const migrated = importData(JSON.stringify(old));
+        expect(migrated).toEqual({
+          ok: true,
+          data: {
+            ...data,
+            prefs: {
+              quality: data.prefs.quality,
+              reducedMotion: data.prefs.reducedMotion,
+              calmMode: false,
+              muted: false,
+              introSeen: data.seeded,
+            },
+          },
+        });
+      }),
+      { numRuns: 100 },
     );
   });
 

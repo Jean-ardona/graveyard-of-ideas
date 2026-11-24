@@ -1,24 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { QualityLevel } from '../domain';
 import { isTypingTarget } from '../interaction/typingTarget';
+import { statsLine } from '../ui/copy';
 import { qualityLabel } from './quality';
 import type { RenderStats } from './renderStats';
-
-const OVERLAY_STYLE: React.CSSProperties = {
-  position: 'fixed',
-  top: '8px',
-  left: '8px',
-  padding: '3px 7px',
-  background: 'rgba(0,0,0,0.55)',
-  color: '#e8e8e8',
-  fontFamily: 'monospace',
-  fontSize: '12px',
-  lineHeight: '1.4',
-  borderRadius: '3px',
-  pointerEvents: 'none',
-  userSelect: 'none',
-  zIndex: 100,
-};
 
 interface FpsCounterProps {
   statsRef: React.MutableRefObject<RenderStats>;
@@ -65,9 +50,5 @@ export default function FpsCounter({ statsRef, quality, onCycleQuality }: FpsCou
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onCycleQuality]);
 
-  return (
-    <div style={OVERLAY_STYLE}>
-      {fps} fps, {calls} draws, {qualityLabel(quality)} (F2)
-    </div>
-  );
+  return <div className="hud-stats">{statsLine(fps, calls, qualityLabel(quality))}</div>;
 }

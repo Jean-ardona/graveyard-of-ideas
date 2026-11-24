@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { TOKENS } from '../ui/theme/tokens';
 import { COLORS } from '../world/config';
 
 /**
@@ -10,19 +11,11 @@ import { COLORS } from '../world/config';
 export const BOOK_LOOK = {
   /** Pale blue-gray band of the page edges; clearly lighter than the cover. */
   pageEdge: '#b7c0cf',
-  /** Pale parchment blue-gray of the leaves: the one paper token, for the blank leaf, the leaf textures and the overlay. */
-  leafPaper: '#c3ccdb',
-  /** Text on the leaves. */
-  leafInk: '#141c30',
-  /** Secondary text, such as the page caption. */
-  leafMuted: '#3a4766',
-  /** Background and border of a text field on the page. */
-  fieldFill: '#dde3ee',
-  fieldBorder: '#5a6a84',
-  /** The resurrection button and the close button. */
-  buttonFill: '#1d2740',
-  buttonText: '#c8d8ff',
-  buttonBorder: '#3b4d73',
+  /**
+   * Leaf paper, ink, muted ink, field and button colors: one source with the HTML skin
+   * (`TOKENS.leaf`), re-exported here for the canvas pages and the overlay.
+   */
+  ...TOKENS.leaf,
   /** Emissive strength of the blank leaf and of the textured front face alike, so both render the same paper. */
   leafGlowIntensity: 0.4,
   /** One-line border drawn on the front board. */
